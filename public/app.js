@@ -53,13 +53,38 @@ document.querySelectorAll('.navbtn').forEach((b) => b.addEventListener('click', 
 }));
 
 // ────────── 实时监控（SSE）──────────
+// 演示重置倒计时（服务端每 10 分钟把业务数据恢复为种子状态——登录页上的承诺，界面上要看得见）
+const resetEl = document.createElement('span');
+resetEl.className = 'live';
+resetEl.id = 'resetIn';
+resetEl.title = '演示数据每 10 分钟自动重置为种子数据';
+document.querySelector('.topbar .right')?.prepend(resetEl);
+function tickReset() {
+  if (!state.nextResetAt) return;
+  const left = Math.max(0, Math.round((state.nextResetAt - Date.now()) / 1000));
+  resetEl.innerHTML = `<i></i>重置倒计时 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+}
+setInterval(tickReset, 1000);
+
 function connectStream() {
   const es = new EventSource('/api/system/stream');
   const dot = $('liveDot');
   es.addEventListener('open', () => { dot.classList.add('on'); dot.classList.remove('off'); $('liveText').textContent = '实时连接'; });
   es.addEventListener('error', () => { dot.classList.remove('on'); dot.classList.add('off'); $('liveText').textContent = '重连中…'; });
+  es.addEventListener('reset', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      state.nextResetAt = d.nextResetAt;
+      tickReset();
+      const view = document.querySelector('.navbtn.on')?.dataset.view;
+      if (view === 'products') loadProducts();          // 正在看商品就把数据刷新过来
+      resetEl.animate?.([{ opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }], { duration: 900 });
+      console.log('[demo] 数据已重置', d.counts);
+    } catch {}
+  });
   es.addEventListener('metrics', (ev) => {
     const m = JSON.parse(ev.data);
+    if (m.nextResetAt) { state.nextResetAt = m.nextResetAt; tickReset(); }
     $('kpiQps').textContent = m.qps;
     $('kpiP95').innerHTML = m.latency.p95 + '<small>ms</small>';
     $('kpiErr').innerHTML = m.errorRate + '<small>%</small>';

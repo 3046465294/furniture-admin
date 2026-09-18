@@ -18,7 +18,8 @@ import {
   loginAllowed, noteLoginFailure, clearLoginFailures, loginRateSnapshot,
   parseCookies, sessionCookieHeader, clearCookieHeader, SESSION_COOKIE,
 } from './auth.js';
-import { recordRequest, snapshot, addSseClient, startMetricsTicker, prometheusText, recentLogEntries, sseClientCount } from './metrics.js';
+import { recordRequest, snapshot, addSseClient, startMetricsTicker, prometheusText, recentLogEntries, sseClientCount, pushLog, broadcast } from './metrics.js';
+import { resetDemoData, isBusinessDataEmpty } from './seed-data.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, '..', 'public');
@@ -362,6 +363,10 @@ function matchRoute(method, pathname) {
   return null;
 }
 
+// 演示重置：登录页承诺了「数据每 10 分钟重置为种子数据」，这里让它成立（可用 DEMO_RESET_MS 覆盖）
+const RESET_INTERVAL_MS = Number(process.env.DEMO_RESET_MS ?? 10 * 60 * 1000);
+let nextResetAt = Date.now() + RESET_INTERVAL_MS;
+
 // 启动指标推送（管理员账号在 listen 回调里创建，那里会把随机密码打印一次）
 // enrich：把需要查库/进程信息的字段补进 SSE 推送里，否则面板上的「在线会话 / 数据库 / Node」会是空的
 startMetricsTicker(1000, () => ({
@@ -369,6 +374,8 @@ startMetricsTicker(1000, () => ({
   dbKB: dbSizeKB(),
   sseClients: sseClientCount(),
   node: process.version,
+  nextResetAt,
+  resetIntervalMs: RESET_INTERVAL_MS,
 }));
 
 const server = createServer(async (req, res) => {
@@ -418,8 +425,25 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   const admin = ensureAdmin();
+
+  // 首次启动写入种子数据；之后每 RESET_INTERVAL_MS 自动重置（只重置业务表，不动账号与会话）
+  if (isBusinessDataEmpty(db)) {
+    const r = resetDemoData(db, { force: true });
+    console.log(`  [demo] 已写入种子数据：${r.categories} 分类 / ${r.products} 商品 / ${r.orders} 订单`);
+  }
+  const resetTimer = setInterval(() => {
+    const r = resetDemoData(db, { force: true });
+    nextResetAt = Date.now() + RESET_INTERVAL_MS;
+    const note = `演示数据已重置为种子数据（${r.products} 商品 / ${r.orders} 订单）`;
+    pushLog({ t: Date.now(), level: 'warn', method: 'SYSTEM', path: '/demo/reset', status: 200, ms: 0, actor: 'system', note });
+    broadcast({ type: 'reset', at: Date.now(), counts: r, nextResetAt });
+    console.log(`  [demo] ${note}`);
+  }, RESET_INTERVAL_MS);
+  resetTimer.unref?.();
+
   console.log(`[furniture-admin v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
   console.log(`  实时监控：/api/system/stream（SSE）   Prometheus：/api/system/metrics.prom`);
+  console.log(`  演示数据每 ${Math.round(RESET_INTERVAL_MS / 60000)} 分钟自动重置（下次：${new Date(nextResetAt).toLocaleTimeString('zh-CN', { hour12: false })}）`);
   if (admin) {
     console.log('  ---------------------------------------------------------------');
     console.log(`  已创建管理员账号：${admin.username}`);
