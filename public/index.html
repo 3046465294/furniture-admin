@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>至尊家居 · 现代化管理后台</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/style.css?v=2.0.3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛋️</text></svg>">
+</head>
+<body>
+
+<!-- ───── 登录 ───── -->
+<section id="login" class="login-wrap" hidden>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <div class="brand">
+      <div class="logo">🛋️</div>
+      <div>
+        <h1>至尊家居</h1>
+        <p>现代化管理后台 · v2.0</p>
+      </div>
+    </div>
+    <label>账号
+      <input name="username" id="username" autocomplete="username" required placeholder="用户名">
+    </label>
+    <label>密码
+      <input name="password" id="password" type="password" autocomplete="current-password" required placeholder="密码">
+    </label>
+    <button type="submit" id="loginBtn">登 录</button>
+    <p class="err" id="loginErr" hidden></p>
+    <p class="hint">本站为个人作品演示系统，数据每 10 分钟自动重置为种子数据；请勿填入任何真实个人信息。</p>
+  </form>
+</section>
+
+<!-- ───── 应用 ───── -->
+<section id="app" hidden>
+  <header class="topbar">
+    <div class="brand-mini"><span class="logo">🛋️</span><b>至尊家居</b><span class="tag">v2.0 重构版</span></div>
+    <nav>
+      <button class="navbtn on" data-view="dashboard">总览</button>
+      <button class="navbtn" data-view="products">家具商品</button>
+      <button class="navbtn" data-view="categories">分类</button>
+      <button class="navbtn" data-view="orders">订单</button>
+      <button class="navbtn" data-view="system">系统</button>
+    </nav>
+    <div class="right">
+      <span class="live" id="liveDot" title="实时监控连接状态"><i></i><span id="liveText">连接中…</span></span>
+      <span class="who" id="whoami"></span>
+      <button class="ghost" id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <!-- 总览 -->
+  <main id="view-dashboard" class="view">
+    <h2>实时监控</h2>
+    <p class="sub">数据由服务端通过 SSE 每秒推送；下面每个数字都来自真实请求采样，不是写死的。</p>
+    <div class="kpis">
+      <div class="kpi"><span>QPS（10s 窗口）</span><b id="kpiQps">0</b></div>
+      <div class="kpi"><span>P95 延迟</span><b id="kpiP95">0<small>ms</small></b></div>
+      <div class="kpi"><span>错误率（60s）</span><b id="kpiErr">0<small>%</small></b></div>
+      <div class="kpi"><span>在线会话</span><b id="kpiSessions">0</b></div>
+      <div class="kpi"><span>内存 RSS</span><b id="kpiRss">0<small>MB</small></b></div>
+      <div class="kpi"><span>数据库</span><b id="kpiDb">0<small>KB</small></b></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>请求量（近 60 秒 / 每秒）</h3>
+        <canvas id="spark" width="720" height="180"></canvas>
+      </div>
+      <div class="card">
+        <h3>最慢接口 Top5</h3>
+        <table class="mini"><thead><tr><th>接口</th><th>次数</th><th>平均</th><th>峰值</th></tr></thead>
+          <tbody id="slowBody"><tr><td colspan="4" class="empty">暂无数据</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>实时请求日志 <span class="dim" id="logCount"></span></h3>
+        <div class="logs" id="logStream"></div>
+      </div>
+      <div class="card">
+        <h3>资源与计数</h3>
+        <div class="kv" id="kvBox"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 商品 -->
+  <main id="view-products" class="view" hidden>
+    <h2>家具商品</h2>
+    <p class="sub">价格以「分」存储避免浮点误差；删除为软删除（数据不物理丢失）。</p>
+    <div class="toolbar">
+      <input id="pQ" placeholder="搜索名称或 SKU" class="grow">
+      <select id="pCat"></select>
+      <select id="pStatus"><option value="">全部状态</option><option value="1">上架</option><option value="0">下架</option></select>
+      <button id="pSearch">查询</button>
+      <button class="primary" id="pAdd">+ 新增商品</button>
+    </div>
+    <div class="card">
+      <table class="data"><thead><tr>
+        <th>ID</th><th>SKU</th><th>名称</th><th>分类</th><th class="num">价格</th><th class="num">库存</th><th>状态</th><th>更新人</th><th>操作</th>
+      </tr></thead><tbody id="pBody"></tbody></table>
+      <div class="pager">
+        <span id="pInfo"></span>
+        <span class="sp"></span>
+        <button class="ghost" id="pPrev">上一页</button>
+        <button class="ghost" id="pNext">下一页</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 分类 -->
+  <main id="view-categories" class="view" hidden>
+    <h2>商品分类</h2>
+    <p class="sub">分类下有商品时会拒绝删除（服务端校验，不是前端装样子）。</p>
+    <div class="toolbar">
+      <input id="cName" placeholder="新分类名称">
+      <input id="cSort" type="number" value="0" style="width:110px" placeholder="排序">
+      <button class="primary" id="cAdd">+ 新增分类</button>
+    </div>
+    <div class="cards" id="cList"></div>
+  </main>
+
+  <!-- 订单 -->
+  <main id="view-orders" class="view" hidden>
+    <h2>订单</h2>
+    <p class="sub">状态流转：待付款 → 已付款 → 已发货 → 已完成 / 已取消。</p>
+    <div class="toolbar">
+      <select id="oStatus">
+        <option value="">全部</option><option value="pending">待付款</option><option value="paid">已付款</option>
+        <option value="shipped">已发货</option><option value="done">已完成</option><option value="cancelled">已取消</option>
+      </select>
+      <button id="oSearch">查询</button>
+    </div>
+    <div class="card">
+      <table class="data"><thead><tr>
+        <th>订单号</th><th>客户</th><th>手机</th><th class="num">金额</th><th class="num">件数</th><th>状态</th><th>下单时间</th>
+      </tr></thead><tbody id="oBody"></tbody></table>
+      <div class="pager"><span id="oInfo"></span><span class="sp"></span>
+        <button class="ghost" id="oPrev">上一页</button><button class="ghost" id="oNext">下一页</button></div>
+    </div>
+  </main>
+
+  <!-- 系统 -->
+  <main id="view-system" class="view" hidden>
+    <h2>系统信息</h2>
+    <p class="sub">这一版是零第三方依赖的 Node.js 服务：没有 npm 依赖，也就没有依赖链漏洞。</p>
+    <div class="grid2">
+      <div class="card"><h3>运行状态</h3><div class="kv" id="sysBox"></div></div>
+      <div class="card"><h3>数据表行数</h3><div class="kv" id="tableBox"></div></div>
+    </div>
+    <div class="card">
+      <h3>操作审计（最近 50 条）</h3>
+      <table class="data"><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>说明</th><th>IP</th></tr></thead>
+        <tbody id="auditBody"></tbody></table>
+    </div>
+    <div class="card">
+      <h3>Prometheus 指标端点</h3>
+      <p class="dim">/api/system/metrics.prom —— 可直接接入 Prometheus / Grafana：</p>
+      <pre id="promPreview" class="pre"></pre>
+    </div>
+  </main>
+</section>
+
+<!-- 商品编辑弹窗 -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <h3 id="mTitle">新增商品</h3>
+    <div class="form">
+      <label>SKU<input id="fSku" placeholder="如 SF-1001"></label>
+      <label>名称<input id="fName" placeholder="如 北欧简约三人布艺沙发"></label>
+      <label>分类<select id="fCat"></select></label>
+      <label>价格（元）<input id="fPrice" type="number" step="0.01" min="0" placeholder="1999.00"></label>
+      <label>库存<input id="fStock" type="number" min="0" value="0"></label>
+      <label>状态<select id="fStatus"><option value="1">上架</option><option value="0">下架</option></select></label>
+      <label class="full">描述<textarea id="fDesc" rows="2" placeholder="材质、尺寸等"></textarea></label>
+    </div>
+    <p class="err" id="mErr" hidden></p>
+    <div class="modal-actions">
+      <button class="ghost" id="mCancel">取消</button>
+      <button class="primary" id="mSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js?v=2.0.3" type="module"></script>
+</body>
+</html>

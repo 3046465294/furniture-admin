@@ -1,0 +1,118 @@
+/* 至尊家居 · 现代化后台 —— 深色主题，手写 CSS，无外部依赖（CSP 只允许 'self'） */
+:root{
+  --bg:#0b1020; --panel:#131a30; --panel2:#0f1628; --line:#243154;
+  --fg:#e8ecf7; --sub:#94a3c4; --acc:#6ea8fe; --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+  --radius:14px;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f6fb; --panel:#fff; --panel2:#f8fafc; --line:#e2e8f0; --fg:#0f172a; --sub:#5b6779; --acc:#1f6feb; }
+}
+*{box-sizing:border-box}
+/* 踩过的坑：.modal 用了 display:grid，会覆盖 <div hidden> 默认的 display:none，
+   结果"隐藏"的弹窗实际铺满全屏、吞掉整页点击（登录按钮点不动、导航点不动）。
+   这一条保证 hidden 永远真的隐藏。 */
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+h1,h2,h3{margin:0}
+h2{font-size:22px;margin-bottom:4px}
+h3{font-size:15px;margin-bottom:10px;color:var(--fg)}
+.sub{color:var(--sub);font-size:13.5px;margin:0 0 18px}
+.dim{color:var(--sub);font-size:12.5px;font-weight:400}
+button{font:inherit;cursor:pointer;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);padding:8px 14px;transition:.15s}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(1.08)}
+button.ghost{background:transparent}
+input,select,textarea{font:inherit;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--acc) 45%,transparent);border-color:var(--acc)}
+.err{color:var(--err);font-size:13px;margin:10px 0 0}
+.hint{color:var(--sub);font-size:12px;margin-top:14px;line-height:1.6}
+
+/* ── 登录 ── */
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:24px;
+  background:radial-gradient(1200px 600px at 20% 0%,#1b2a4d 0%,transparent 60%),radial-gradient(900px 500px at 100% 100%,#1d3b5c 0%,transparent 55%)}
+.login-card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-card .brand{display:flex;gap:14px;align-items:center;margin-bottom:22px}
+.login-card .logo{font-size:32px}
+.login-card h1{font-size:22px}
+.login-card p{margin:2px 0 0;color:var(--sub);font-size:13px}
+.login-card label{display:block;margin-bottom:14px;font-size:13px;color:var(--sub)}
+.login-card input{margin-top:6px;padding:11px 12px}
+.login-card button{width:100%;padding:12px;margin-top:6px;background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600;font-size:15px}
+
+/* ── 顶栏 ── */
+.topbar{display:flex;align-items:center;gap:18px;padding:12px 22px;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.brand-mini{display:flex;align-items:center;gap:8px;font-size:15px}
+.brand-mini .logo{font-size:20px}
+.tag{background:var(--panel2);border:1px solid var(--line);color:var(--sub);font-size:11.5px;padding:2px 8px;border-radius:999px}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+.navbtn{background:transparent;border-color:transparent;color:var(--sub);padding:7px 12px}
+.navbtn.on{background:var(--panel2);border-color:var(--line);color:var(--fg);font-weight:600}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.live{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sub)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--warn);display:inline-block}
+.live.on i{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}
+.live.off i{background:var(--err)}
+.who{font-size:13px;color:var(--sub)}
+
+/* ── 布局 ── */
+.view{max-width:1240px;margin:0 auto;padding:26px 22px 70px}
+.kpis{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.kpi span{display:block;color:var(--sub);font-size:12.5px;margin-bottom:6px}
+.kpi b{font-size:26px;font-variant-numeric:tabular-nums}
+.kpi small{font-size:12px;color:var(--sub);margin-left:3px;font-weight:400}
+.grid2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;overflow:hidden}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.catcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.catcard b{font-size:15px}
+.catcard .meta{color:var(--sub);font-size:12.5px;margin-top:4px}
+.catcard button{margin-top:12px;padding:6px 10px;font-size:12.5px}
+
+/* ── 表格 ── */
+table{width:100%;border-collapse:collapse;font-size:14px}
+table.data th,table.data td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.data th{color:var(--sub);font-weight:600;font-size:12.5px}
+table.data tbody tr:hover{background:var(--panel2)}
+table.data td.num,table.data th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.mini{font-size:12.5px}
+table.mini th,table.mini td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+.empty{color:var(--sub);text-align:center;padding:18px}
+.badge{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line)}
+.badge.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.badge.off{color:var(--sub)}
+.badge.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.tools{display:flex;gap:8px}
+.tools button{padding:6px 10px;font-size:12.5px}
+.toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.toolbar .grow{flex:1;min-width:180px}
+.toolbar select,.toolbar input{width:auto;min-width:130px}
+.pager{display:flex;align-items:center;gap:10px;padding-top:14px;color:var(--sub);font-size:13px}
+.pager .sp{margin-left:auto}
+.kv{display:grid;gap:8px}
+.kv div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding-bottom:6px;font-size:13.5px}
+.kv span:first-child{color:var(--sub)}
+.logs{height:280px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;font:12.5px/1.7 ui-monospace,Consolas,monospace}
+.logs div{display:flex;gap:8px;white-space:nowrap}
+.logs .t{color:var(--sub)}
+.logs .p{color:var(--acc)}
+.logs .s2{color:var(--ok)}.logs .s4{color:var(--warn)}.logs .s5{color:var(--err)}
+.pre{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.6 ui-monospace,Consolas,monospace;max-height:220px;overflow:auto;color:var(--sub);white-space:pre-wrap}
+
+/* ── 弹窗 ── */
+.modal{position:fixed;inset:0;background:rgba(6,10,20,.72);display:grid;place-items:center;z-index:50;padding:20px}
+.modal-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;width:100%;max-width:560px;max-height:90vh;overflow:auto}
+.form{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+.form label{font-size:12.5px;color:var(--sub);display:block}
+.form input,.form select,.form textarea{margin-top:5px}
+.form .full{grid-column:1/-1}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+@media (max-width:640px){
+  .grid2{grid-template-columns:1fr}
+  .form{grid-template-columns:1fr}
+  .view{padding:18px 14px 60px}
+  .topbar{padding:10px 14px;gap:10px}
+}

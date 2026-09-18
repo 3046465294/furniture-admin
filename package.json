@@ -1,0 +1,13 @@
+{
+  "name": "furniture-admin",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "至尊家居 · 现代化重构版 — 家具商品/分类/订单管理 + 实时监控面板（零第三方依赖）",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node src/server.js",
+    "seed": "node scripts/seed.js",
+    "reset-password": "node scripts/reset-password.js"
+  }
+}
