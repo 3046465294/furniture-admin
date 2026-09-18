@@ -20,6 +20,7 @@ import {
 } from './auth.js';
 import { recordRequest, snapshot, addSseClient, startMetricsTicker, prometheusText, recentLogEntries, sseClientCount, pushLog, broadcast } from './metrics.js';
 import { resetDemoData, isBusinessDataEmpty } from './seed-data.js';
+import { ensureAlertRules, evaluateAlerts, getRules, setRule, activeAlerts, alertHistory, onAlertChange } from './alerts.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, '..', 'public');
@@ -345,6 +346,170 @@ route('GET', '/api/system/stream', async ({ req, res, user }) => {
   return { status: 200 };
 });
 
+// ── 二期：用户与权限（RBAC）、会话管理 ──
+const ROLES = ['admin', 'operator', 'viewer'];
+
+route('GET', '/api/users', guard(async ({ res }) => json(res, 200, {
+  rows: db.prepare('select id,username,display_name,role,active,last_login_at,created_at from users order by id').all()
+    .map((u) => ({ id: u.id, username: u.username, displayName: u.display_name, role: u.role, active: u.active, lastLoginAt: u.last_login_at, createdAt: u.created_at })),
+}), 'manage_users'));
+
+route('POST', '/api/users', guard(async ({ req, res, body, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const username = str(body.username, 40);
+  const password = String(body.password ?? '');
+  const role = ROLES.includes(body.role) ? body.role : 'viewer';
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) return json(res, 400, { error: '用户名需为 3-20 位字母、数字或下划线' });
+  if (password.length < 8) return json(res, 400, { error: '口令至少 8 位' });
+  if (db.prepare('select id from users where username = ?').get(username)) return json(res, 409, { error: '用户名已存在' });
+  const r = db.prepare('insert into users(username,display_name,password_hash,role,active,created_at) values (?,?,?,?,1,?)')
+    .run(username, str(body.displayName, 40) || username, hashPassword(password), role, now());
+  audit(user.username, 'user_create', `user#${r.lastInsertRowid}`, `${username} / ${role}`, ip);
+  return json(res, 201, { id: Number(r.lastInsertRowid) });
+}, 'manage_users'));
+
+route('PUT', '/api/users/:id', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const target = db.prepare('select * from users where id = ?').get(id);
+  if (!target) return json(res, 404, { error: '用户不存在' });
+  const role = ROLES.includes(body.role) ? body.role : target.role;
+  const active = body.active === undefined ? target.active : (body.active ? 1 : 0);
+  // 关键保护：不允许把最后一个启用的管理员降级或停用，否则会把系统自己锁死
+  if (target.role === 'admin' && (role !== 'admin' || !active)) {
+    const admins = db.prepare("select count(*) as c from users where role = 'admin' and active = 1").get().c;
+    if (admins <= 1) return json(res, 409, { error: '至少保留一个启用的管理员账号' });
+  }
+  db.prepare('update users set display_name = ?, role = ?, active = ? where id = ?')
+    .run(str(body.displayName, 40) || target.display_name, role, active, id);
+  if (body.password) {
+    if (String(body.password).length < 8) return json(res, 400, { error: '口令至少 8 位' });
+    db.prepare('update users set password_hash = ?, failed_count = 0, locked_until = 0 where id = ?').run(hashPassword(String(body.password)), id);
+  }
+  if (!active) db.prepare('update sessions set revoked = 1 where user_id = ?').run(id);
+  audit(user.username, 'user_update', `user#${id}`, `${target.username} → ${role}${active ? '' : '（已停用）'}${body.password ? ' + 重置口令' : ''}`, ip);
+  return json(res, 200, { ok: true });
+}, 'manage_users'));
+
+route('GET', '/api/sessions', guard(async ({ res, user }) => json(res, 200, {
+  rows: db.prepare(`select s.id, s.created_at, s.expires_at, s.ip, s.user_agent, u.username
+                    from sessions s join users u on u.id = s.user_id
+                    where s.revoked = 0 and s.expires_at > ? order by s.created_at desc limit 50`).all(Date.now())
+    .map((s) => ({ id: s.id.slice(0, 8) + '…', fullId: s.id, username: s.username, ip: s.ip, userAgent: (s.user_agent ?? '').slice(0, 60), createdAt: new Date(s.created_at).toISOString().slice(0, 19).replace('T', ' '), expiresInMin: Math.round((s.expires_at - Date.now()) / 60000), self: false })),
+}), 'manage_users'));
+
+route('DELETE', '/api/sessions/:id', guard(async ({ req, res, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = str(params.id, 64);
+  const row = db.prepare('select * from sessions where id = ?').get(id);
+  if (!row) return json(res, 404, { error: '会话不存在' });
+  db.prepare('update sessions set revoked = 1 where id = ?').run(id);
+  audit(user.username, 'session_revoke', `session#${id.slice(0, 8)}`, '', ip);
+  return json(res, 200, { ok: true });
+}, 'manage_users'));
+
+// ── 二期：订单写操作（带状态机校验）与分类修改 ──
+const ORDER_FLOW = { pending: ['paid', 'cancelled'], paid: ['shipped', 'cancelled'], shipped: ['done'], done: [], cancelled: [] };
+const ORDER_LABEL = { pending: '待付款', paid: '已付款', shipped: '已发货', done: '已完成', cancelled: '已取消' };
+
+route('POST', '/api/orders', guard(async ({ req, res, body, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const customer = str(body.customer, 40);
+  if (!customer) return json(res, 400, { error: '客户名称必填' });
+  const items = clampInt(body.itemCount, 1, 999, 1);
+  const total = Math.round(Number(body.total ?? 0) * 100);
+  if (!Number.isFinite(total) || total < 0) return json(res, 400, { error: '金额不合法' });
+  const no = 'SO' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + String(Date.now()).slice(-5);
+  const r = db.prepare(`insert into orders(order_no,customer,phone,total_cents,item_count,status,remark,created_by,created_at,updated_by,updated_at)
+                        values (?,?,?,?,?, 'pending', ?,?,?,?,?)`)
+    .run(no, customer, str(body.phone, 20), total, items, str(body.remark, 200), user.username, now(), user.username, now());
+  audit(user.username, 'order_create', `order#${r.lastInsertRowid}`, `${no} / ${customer}`, ip);
+  return json(res, 201, { id: Number(r.lastInsertRowid), orderNo: no });
+}, 'write'));
+
+route('PUT', '/api/orders/:id/status', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const cur = db.prepare('select * from orders where id = ? and deleted = 0').get(id);
+  if (!cur) return json(res, 404, { error: '订单不存在' });
+  const next = str(body.status, 20);
+  if (!ORDER_LABEL[next]) return json(res, 400, { error: '未知的状态值' });
+  if (next === cur.status) return json(res, 400, { error: `订单已经是「${ORDER_LABEL[next]}」` });
+  const allowed = ORDER_FLOW[cur.status] ?? [];
+  if (!allowed.includes(next)) {
+    return json(res, 409, { error: `不允许从「${ORDER_LABEL[cur.status]}」直接变成「${ORDER_LABEL[next]}」`, allowed: allowed.map((s) => ({ value: s, label: ORDER_LABEL[s] })) });
+  }
+  db.prepare('update orders set status = ?, updated_by = ?, updated_at = ? where id = ?').run(next, user.username, now(), id);
+  audit(user.username, 'order_status', `order#${id}`, `${ORDER_LABEL[cur.status]} → ${ORDER_LABEL[next]}`, ip);
+  return json(res, 200, { ok: true, status: next });
+}, 'write'));
+
+route('PUT', '/api/categories/:id', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const cur = db.prepare('select * from categories where id = ? and deleted = 0').get(id);
+  if (!cur) return json(res, 404, { error: '分类不存在' });
+  db.prepare('update categories set name = ?, sort = ?, status = ?, remark = ?, updated_by = ?, updated_at = ? where id = ?')
+    .run(str(body.name, 40) || cur.name, clampInt(body.sort, 0, 9999, cur.sort), body.status === 0 ? 0 : 1,
+      body.remark === undefined ? cur.remark : str(body.remark, 200), user.username, now(), id);
+  audit(user.username, 'category_update', `category#${id}`, str(body.name, 40), ip);
+  return json(res, 200, { ok: true });
+}, 'write'));
+
+// ── 三期：告警规则与历史 ──
+route('GET', '/api/system/alerts', guard(async ({ res }) => json(res, 200, {
+  rules: getRules(), active: activeAlerts(), history: alertHistory(30),
+})));
+route('PUT', '/api/system/alerts/:id', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const rule = setRule(str(params.id, 40), body);
+  if (!rule) return json(res, 400, { error: '规则不存在或阈值不合法' });
+  audit(user.username, 'alert_rule_update', `rule#${rule.id}`, `阈值=${rule.threshold}${rule.unit} 启用=${rule.enabled}`, ip);
+  return json(res, 200, { rule });
+}, 'manage_users'));
+
+// ── 三期：CSV 导出（不引依赖，手动拼，注意按 RFC4180 转义） ──
+const csvCell = (v) => {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+const csv = (rows) => '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+
+route('GET', '/api/export/products.csv', guard(async ({ req, res, user, ip }) => {
+  const rows = [['ID', 'SKU', '名称', '分类', '价格(元)', '库存', '状态', '创建人', '创建时间']];
+  for (const p of db.prepare(`select p.*, c.name as cat from products p left join categories c on c.id = p.category_id
+                              where p.deleted = 0 order by p.id`).all()) {
+    rows.push([p.id, p.sku, p.name, p.cat ?? '', (p.price_cents / 100).toFixed(2), p.stock, p.status ? '上架' : '下架', p.created_by, p.created_at]);
+  }
+  audit(user.username, 'export_products', 'csv', `${rows.length - 1} 行`, ip);
+  const body = csv(rows);
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="products.csv"',
+    'Content-Length': Buffer.byteLength(body),
+    ...securityHeaders(isSecure(req)),
+  });
+  res.end(body);
+  return { status: 200 };
+}, 'read'));
+
+route('GET', '/api/export/orders.csv', guard(async ({ req, res, user, ip }) => {
+  const rows = [['订单号', '客户', '手机', '金额(元)', '件数', '状态', '备注', '创建时间']];
+  for (const o of db.prepare('select * from orders where deleted = 0 order by id').all()) {
+    rows.push([o.order_no, o.customer, o.phone, (o.total_cents / 100).toFixed(2), o.item_count, ORDER_LABEL[o.status] ?? o.status, o.remark, o.created_at]);
+  }
+  audit(user.username, 'export_orders', 'csv', `${rows.length - 1} 行`, ip);
+  const body = csv(rows);
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="orders.csv"',
+    'Content-Length': Buffer.byteLength(body),
+    ...securityHeaders(isSecure(req)),
+  });
+  res.end(body);
+  return { status: 200 };
+}, 'read'));
+
 // ────────────────────────── 主服务 ──────────────────────────
 function matchRoute(method, pathname) {
   for (const r of ROUTES) {
@@ -369,14 +534,40 @@ let nextResetAt = Date.now() + RESET_INTERVAL_MS;
 
 // 启动指标推送（管理员账号在 listen 回调里创建，那里会把随机密码打印一次）
 // enrich：把需要查库/进程信息的字段补进 SSE 推送里，否则面板上的「在线会话 / 数据库 / Node」会是空的
-startMetricsTicker(1000, () => ({
-  sessions: activeSessionCount(),
-  dbKB: dbSizeKB(),
-  sseClients: sseClientCount(),
-  node: process.version,
-  nextResetAt,
-  resetIntervalMs: RESET_INTERVAL_MS,
-}));
+startMetricsTicker(1000, (snap) => {
+  try { evaluateAlerts(snap); } catch {}
+  return {
+    sessions: activeSessionCount(),
+    dbKB: dbSizeKB(),
+    sseClients: sseClientCount(),
+    node: process.version,
+    nextResetAt,
+    resetIntervalMs: RESET_INTERVAL_MS,
+    alerts: activeAlerts(),
+  };
+});
+
+// 告警状态变化（firing / resolved）→ 推进实时日志流与面板
+onAlertChange((ev) => {
+  pushLog({
+    t: Date.now(), level: ev.state === 'firing' ? 'error' : 'info',
+    method: 'ALERT', path: '/' + ev.ruleId, status: ev.state === 'firing' ? 500 : 200, ms: 0,
+    actor: 'monitor',
+    note: ev.state === 'firing'
+      ? ('触发：' + ev.name + ' ' + ev.value + ev.unit + ' > ' + ev.threshold + ev.unit)
+      : ('恢复：' + ev.name + '（持续 ' + ev.durationSec + 's）'),
+  });
+});
+
+ensureAlertRules();
+
+// 告警判定必须独立于「有没有人开着监控面板」。
+// 踩过的坑：一开始把判定塞在 SSE 推送的 enrich 里，而推送在没有订阅者时会直接 return，
+// 结果出现"没人看面板时告警不评估"——监控系统最不该有的行为。现在独立成 1 秒定时器。
+const alertTimer = setInterval(() => {
+  try { evaluateAlerts(snapshot()); } catch {}
+}, 1000);
+alertTimer.unref?.();
 
 const server = createServer(async (req, res) => {
   const t0 = Date.now();

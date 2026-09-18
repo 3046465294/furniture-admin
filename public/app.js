@@ -91,6 +91,7 @@ function connectStream() {
     $('kpiSessions').textContent = m.sessions ?? '-';
     $('kpiRss').innerHTML = m.rssMB + '<small>MB</small>';
     $('kpiDb').innerHTML = (m.dbKB ?? 0) + '<small>KB</small>';
+    window.__faRenderAlerts?.(m.alerts);   // 活跃告警横幅（由 adminPanel 提供渲染函数）
     drawSpark(m.series ?? []);
     const tb = $('slowBody');
     tb.innerHTML = (m.slowest ?? []).length
@@ -254,6 +255,8 @@ $('cAdd').addEventListener('click', async () => {
 
 // ────────── 订单 ──────────
 const ORDER_STATUS = { pending: '待付款', paid: '已付款', shipped: '已发货', done: '已完成', cancelled: '已取消' };
+// 与服务端 ORDER_FLOW 保持一致的前端镜像（仅用于渲染可选动作，真正的校验在服务端）
+const ORDER_FLOW = { pending: ['paid', 'cancelled'], paid: ['shipped', 'cancelled'], shipped: ['done'], done: [], cancelled: [] };
 async function loadOrders() {
   const q = new URLSearchParams({ page: state.oPage, size: state.oSize });
   if ($('oStatus').value) q.set('status', $('oStatus').value);
@@ -261,7 +264,8 @@ async function loadOrders() {
   $('oBody').innerHTML = r.rows.length ? r.rows.map((o) => `
     <tr><td>${esc(o.orderNo)}</td><td>${esc(o.customer)}</td><td>${esc(o.phone)}</td>
     <td class="num">¥${o.total.toFixed(2)}</td><td class="num">${o.itemCount}</td>
-    <td><span class="badge ${o.status === 'done' ? 'ok' : o.status === 'cancelled' ? 'off' : 'warn'}">${ORDER_STATUS[o.status] ?? o.status}</span></td>
+    <td><span class="badge ${o.status === 'done' ? 'ok' : o.status === 'cancelled' ? 'off' : 'warn'}">${ORDER_STATUS[o.status] ?? o.status}</span>
+      <span class="tools" style="margin-left:8px">${(ORDER_FLOW[o.status] ?? []).map((s) => `<button data-ost="${o.id}:${s}" title="流转到「${ORDER_STATUS[s]}」">→ ${ORDER_STATUS[s]}</button>`).join('') || '<span class="dim">—</span>'}</span></td>
     <td class="dim">${esc(o.createdAt)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">暂无订单</td></tr>';
   $('oInfo').textContent = `共 ${r.total} 条`;
 }
@@ -290,6 +294,184 @@ async function loadSystem() {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kv = (pairs) => pairs.map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
 const fmtUptime = (s) => s < 60 ? s + ' 秒' : s < 3600 ? Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒' : Math.floor(s / 3600) + ' 小时 ' + Math.floor((s % 3600) / 60) + ' 分';
+
+// ══════════ 二期/三期界面：用户与权限 · 会话 · 告警规则 · 导出（动态注入，避免改动 index.html）══════════
+(function adminPanel() {
+  const nav = document.querySelector('.topbar nav');
+  const app = document.getElementById('app');
+  if (!nav || !app) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'navbtn'; btn.dataset.view = 'adminpanel'; btn.textContent = '用户与告警';
+  nav.appendChild(btn);
+
+  const view = document.createElement('main');
+  view.className = 'view'; view.id = 'view-adminpanel'; view.hidden = true;
+  view.innerHTML = `
+    <h2>用户与告警</h2>
+    <p class="sub">二期：RBAC 用户管理与会话吊销；三期：告警规则（阈值可现场改，改了立刻生效）、状态变化历史、CSV 导出。</p>
+    <div class="kpis" id="apKpis"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>告警规则 <span class="dim">改完点保存，服务端每秒按新阈值判定</span></h3>
+        <table class="data"><thead><tr><th>规则</th><th>指标</th><th class="num">阈值</th><th>启用</th><th>操作</th></tr></thead>
+          <tbody id="apRules"></tbody></table>
+      </div>
+      <div class="card">
+        <h3>告警历史 <span class="dim">只记录状态变化（触发/恢复），不刷屏</span></h3>
+        <table class="mini"><thead><tr><th>时间</th><th>规则</th><th>状态</th><th>值</th></tr></thead>
+          <tbody id="apHistory"></tbody></table>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>用户与权限</h3>
+        <div class="toolbar" style="margin-bottom:12px">
+          <input id="apNewUser" placeholder="用户名（3-20 位）" style="width:150px">
+          <input id="apNewPass" placeholder="口令（≥8 位）" style="width:150px" type="password">
+          <select id="apNewRole"><option value="viewer">只读 viewer</option><option value="operator">运营 operator</option><option value="admin">管理员 admin</option></select>
+          <button class="primary" id="apAddUser">+ 新建用户</button>
+        </div>
+        <table class="data"><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead>
+          <tbody id="apUsers"></tbody></table>
+      </div>
+      <div class="card">
+        <h3>在线会话 <span class="dim">可强制吊销</span></h3>
+        <table class="data"><thead><tr><th>用户</th><th>IP</th><th>剩余</th><th>操作</th></tr></thead>
+          <tbody id="apSessions"></tbody></table>
+        <div class="toolbar" style="margin-top:14px">
+          <a class="btn" href="/api/export/products.csv" download>导出商品 CSV</a>
+          <a class="btn ghost" href="/api/export/orders.csv" download>导出订单 CSV</a>
+        </div>
+      </div>
+    </div>`;
+  app.appendChild(view);
+
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.navbtn').forEach((x) => x.classList.toggle('on', x === btn));
+    document.querySelectorAll('.view').forEach((v) => (v.hidden = v.id !== 'view-adminpanel'));
+    loadAdmin();
+  });
+
+  // 订单状态流转（表格里的 → 按钮，事件委托）
+  $('oBody').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ost]');
+    if (!b) return;
+    const [id, status] = b.dataset.ost.split(':');
+    b.disabled = true;
+    try {
+      await api(`/api/orders/${id}/status`, { method: 'PUT', body: { status } });
+      loadOrders();
+    } catch (err) {
+      alert(err.message);          // 服务端会返回「不允许从 X 直接变成 Y」并附可选状态
+      loadOrders();
+    }
+  });
+
+  const RULE_LABEL = { error_rate: '错误率过高', p95_latency: 'P95 延迟过高', rss_memory: '内存占用过高', qps_spike: 'QPS 突增' };
+
+  async function loadAdmin() {
+    const [alerts, users, sessions] = await Promise.all([
+      api('/api/system/alerts'), api('/api/users'), api('/api/sessions'),
+    ]);
+
+    $('apKpis').innerHTML = `
+      <div class="kpi"><span>活跃告警</span><b>${alerts.active.length}</b></div>
+      <div class="kpi"><span>规则总数</span><b>${alerts.rules.length}</b></div>
+      <div class="kpi"><span>已启用规则</span><b>${alerts.rules.filter((r) => r.enabled).length}</b></div>
+      <div class="kpi"><span>用户 / 在线会话</span><b>${users.rows.length}<small> / ${sessions.rows.length}</small></b></div>`;
+
+    $('apRules').innerHTML = alerts.rules.map((r) => `
+      <tr>
+        <td>${esc(RULE_LABEL[r.id] ?? r.name)}${alerts.active.some((a) => a.ruleId === r.id) ? ' <span class="badge warn">告警中</span>' : ''}</td>
+        <td class="dim">${esc(r.metric)}</td>
+        <td class="num"><input data-th="${r.id}" value="${r.threshold}" type="number" style="width:90px;text-align:right"> ${esc(r.unit)}</td>
+        <td><input data-en="${r.id}" type="checkbox" ${r.enabled ? 'checked' : ''} style="width:auto"></td>
+        <td><button data-save="${r.id}">保存</button></td>
+      </tr>`).join('');
+
+    $('apHistory').innerHTML = alerts.history.length ? alerts.history.map((h) => `
+      <tr><td class="dim">${esc(h.created_at)}</td><td>${esc(RULE_LABEL[h.rule_id] ?? h.name)}</td>
+      <td><span class="badge ${h.state === 'firing' ? 'warn' : 'ok'}">${h.state === 'firing' ? '触发' : '恢复'}</span></td>
+      <td class="num">${h.value}${esc(h.unit)}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">还没有告警记录</td></tr>';
+
+    $('apUsers').innerHTML = users.rows.map((u) => `
+      <tr>
+        <td>${esc(u.username)}<span class="dim"> ${esc(u.displayName)}</span></td>
+        <td><select data-urole="${u.id}">
+          ${['admin', 'operator', 'viewer'].map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}
+        </select></td>
+        <td><span class="badge ${u.active ? 'ok' : 'off'}">${u.active ? '启用' : '停用'}</span></td>
+        <td class="dim">${esc(u.lastLoginAt ?? '—')}</td>
+        <td><div class="tools">
+          <button data-usave="${u.id}">保存</button>
+          <button data-utoggle="${u.id}:${u.active ? 0 : 1}">${u.active ? '停用' : '启用'}</button>
+          <button data-upass="${u.id}">重置口令</button>
+        </div></td>
+      </tr>`).join('');
+
+    $('apSessions').innerHTML = sessions.rows.length ? sessions.rows.map((s) => `
+      <tr><td>${esc(s.username)}</td><td class="dim">${esc(s.ip)}</td><td class="num">${s.expiresInMin} 分钟</td>
+      <td><button data-srev="${esc(s.fullId)}">吊销</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">没有活跃会话</td></tr>';
+
+    view.querySelectorAll('[data-save]').forEach((b) => b.addEventListener('click', async () => {
+      const id = b.dataset.save;
+      const threshold = Number(view.querySelector(`[data-th="${id}"]`).value);
+      const enabled = view.querySelector(`[data-en="${id}"]`).checked;
+      try { await api('/api/system/alerts/' + id, { method: 'PUT', body: { threshold, enabled } }); loadAdmin(); }
+      catch (err) { alert(err.message); }
+    }));
+
+    view.querySelectorAll('[data-usave]').forEach((b) => b.addEventListener('click', async () => {
+      const id = Number(b.dataset.usave);
+      const role = view.querySelector(`[data-urole="${id}"]`).value;
+      try { await api('/api/users/' + id, { method: 'PUT', body: { role } }); loadAdmin(); }
+      catch (err) { alert(err.message); }
+    }));
+    view.querySelectorAll('[data-utoggle]').forEach((b) => b.addEventListener('click', async () => {
+      const [id, active] = b.dataset.utoggle.split(':');
+      try { await api('/api/users/' + id, { method: 'PUT', body: { active: active === '1' } }); loadAdmin(); }
+      catch (err) { alert(err.message); }
+    }));
+    view.querySelectorAll('[data-upass]').forEach((b) => b.addEventListener('click', async () => {
+      const pwd = prompt('输入新口令（至少 8 位）');
+      if (!pwd) return;
+      try { await api('/api/users/' + b.dataset.upass, { method: 'PUT', body: { password: pwd } }); alert('口令已重置，该用户的其它会话已被吊销'); loadAdmin(); }
+      catch (err) { alert(err.message); }
+    }));
+    view.querySelectorAll('[data-srev]').forEach((b) => b.addEventListener('click', async () => {
+      try { await api('/api/sessions/' + b.dataset.srev, { method: 'DELETE' }); loadAdmin(); }
+      catch (err) { alert(err.message); }
+    }));
+  }
+
+  $('apAddUser').addEventListener('click', async () => {
+    try {
+      await api('/api/users', { method: 'POST', body: {
+        username: $('apNewUser').value, password: $('apNewPass').value, role: $('apNewRole').value,
+      } });
+      $('apNewUser').value = ''; $('apNewPass').value = '';
+      loadAdmin();
+    } catch (err) { alert(err.message); }
+  });
+
+  // 活跃告警横幅：SSE 推送里带 alerts 字段
+  window.__faRenderAlerts = (list) => {
+    let bar = document.getElementById('alertBar');
+    if (!list?.length) { bar?.remove(); return; }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'alertBar';
+      bar.className = 'card';
+      bar.style.cssText = 'max-width:1240px;margin:14px auto 0;border-left:5px solid var(--warn);background:#2a1f10';
+      document.getElementById('app').prepend(bar);
+    }
+    bar.innerHTML = '<b style="color:var(--warn)">⚠ 活跃告警</b> ' + list.map((a) =>
+      `<span class="badge warn" style="margin-left:8px">${esc(a.name)} ${a.value}${esc(a.unit)} > ${a.threshold}${esc(a.unit)} · 持续 ${a.sinceSec}s</span>`).join('');
+  };
+})();
 
 // ────────── 启动 ──────────
 async function boot() {

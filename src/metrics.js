@@ -125,13 +125,14 @@ export function broadcast(payload) {
   }
 }
 
-/** 每秒推送一次指标快照（enrich 用于补齐需要查库的字段：会话数、DB 体积、Node 版本等） */
+/** 每秒推送一次指标快照（enrich 收到快照，可补齐需要查库的字段，也能顺带跑告警判定） */
 export function startMetricsTicker(intervalMs = 1000, enrich = () => ({})) {
   const timer = setInterval(() => {
     if (!sseClients.size) return;
+    const s = snapshot();
     let extra = {};
-    try { extra = enrich(); } catch { extra = {}; }
-    broadcast({ type: 'metrics', ...snapshot(), ...extra });
+    try { extra = enrich(s); } catch { extra = {}; }
+    broadcast({ type: 'metrics', ...s, ...extra });
   }, intervalMs);
   timer.unref?.();
   return () => clearInterval(timer);
