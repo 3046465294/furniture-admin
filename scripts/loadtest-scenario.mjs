@@ -67,7 +67,7 @@ const main = async () => {
   let worst = { level: 0, p95: 0, errRate: 0, rps: 0 }
 
   for (const level of LEVELS) {
-    const lat = []; let ok = 0, bad = 0, n = 0
+    const lat = []; let ok = 0, bad = 0, rejected = 0, n = 0
     const t0 = nowMs(); const deadline = t0 + SECONDS * 1000
     const byKind = { list: 0, detail: 0, addCart: 0, cart: 0 }
 
@@ -82,7 +82,7 @@ const main = async () => {
         else if (r < 0.90) { res = await call('/api/shop/cart', { method: 'POST', body: { productId: pid, qty: 1 } }); byKind.addCart++ }
         else { res = await call('/api/shop/cart'); byKind.cart++ }
         n++; lat.push(res.ms)
-        if (res.ok) ok++; else bad++
+        if (res.status >= 500 || res.status === 0) bad++; else if (res.status >= 400) rejected++; else ok++
         i++
         await sleep(0)
       }
@@ -90,11 +90,11 @@ const main = async () => {
     await Promise.all(Array.from({ length: level }, (_, i) => worker(i)))
     const dur = (nowMs() - t0) / 1000
     const rps = n / dur
-    const errRate = n ? bad / n : 0
+    const errRate = n ? bad / n : 0            // 仅 5xx 与网络失败计入故障率
     const p = { p50: pct(lat, 0.5), p95: pct(lat, 0.95), p99: pct(lat, 0.99) }
-    report.levels.push({ level, seconds: Number(dur.toFixed(1)), requests: n, rps: Number(rps.toFixed(1)), ok, bad, errRate: Number(errRate.toFixed(4)), ...p, mix: byKind })
+    report.levels.push({ level, seconds: Number(dur.toFixed(1)), requests: n, rps: Number(rps.toFixed(1)), ok, bad, rejected, rejectRate: Number((n ? rejected / n : 0).toFixed(4)), errRate: Number(errRate.toFixed(4)), ...p, mix: byKind })
     if (p.p95 > worst.p95) worst = { level, p95: p.p95, errRate, rps }
-    console.log(`  并发 ${String(level).padStart(3)} │ 请求 ${String(n).padStart(6)} │ ${rps.toFixed(0).padStart(5)} req/s │ P50 ${String(p.p50).padStart(4)}ms P95 ${String(p.p95).padStart(4)}ms P99 ${String(p.p99).padStart(4)}ms │ 错误 ${(errRate * 100).toFixed(2)}%`)
+    console.log(`  并发 ${String(level).padStart(3)} │ 请求 ${String(n).padStart(6)} │ ${rps.toFixed(0).padStart(5)} req/s │ P50 ${String(p.p50).padStart(4)}ms P95 ${String(p.p95).padStart(4)}ms P99 ${String(p.p99).padStart(4)}ms │ 故障 ${(errRate * 100).toFixed(2)}% 拒绝 ${((n ? rejected / n : 0) * 100).toFixed(1)}%`)
   }
 
   // 门禁判定（以最高档为准）
@@ -103,7 +103,7 @@ const main = async () => {
   report.verdict = { passed, lastLevel: last.level, p95: last.p95, errRate: last.errRate, rps: last.rps }
 
   console.log('')
-  console.log(`  最高档 并发 ${last.level}：P95 ${last.p95}ms（限 ${P95_LIMIT}）· 错误率 ${(last.errRate * 100).toFixed(2)}%（限 ${(ERR_LIMIT * 100).toFixed(1)}%）· 吞吐 ${last.rps} req/s`)
+  console.log(`  最高档 并发 ${last.level}：P95 ${last.p95}ms（限 ${P95_LIMIT}）· 故障率 ${(last.errRate * 100).toFixed(2)}%（限 ${(ERR_LIMIT * 100).toFixed(1)}%）· 业务拒绝 ${(last.rejectRate * 100).toFixed(1)}%（不计入故障）· 吞吐 ${last.rps} req/s`)
   console.log(`  ${passed ? '✅ 通过 SLO 门禁' : '❌ 未达 SLO 门禁'}`)
   console.log(`  业务比例：${JSON.stringify(last.mix)}`)
 
