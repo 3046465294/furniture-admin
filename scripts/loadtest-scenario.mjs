@@ -63,11 +63,22 @@ const main = async () => {
   if (!ids.length) { console.error('  ✗ 拿不到商品清单，终止'); process.exit(1) }
   console.log(`  商品样本: ${ids.length} 个`)
 
+  // 预取每个商品的「有货规格」skuId。不这么做的话加购请求不带 skuId →
+  // 服务端取首个规格 → 常无货 → 409；那种拒绝虽合法，却会让压测失去意义。
+  const skuMap = {}
+  for (const id of ids) {
+    const r = await fetch(BASE + '/api/shop/products/' + id, { headers: cookie ? { cookie } : {} })
+    const d = await r.json().catch(() => ({}))
+    const sku = (d.skus ?? []).find((s) => s.stock > 1)
+    if (sku) skuMap[id] = sku.id
+  }
+  console.log(`  有货规格覆盖: ${Object.keys(skuMap).length}/${ids.length} 个商品`)
+
   const report = { base: BASE, at: new Date().toISOString(), levels: [], thresholds: { p95: P95_LIMIT, errRate: ERR_LIMIT } }
   let worst = { level: 0, p95: 0, errRate: 0, rps: 0 }
 
   for (const level of LEVELS) {
-    const lat = []; let ok = 0, bad = 0, rejected = 0, n = 0
+    const lat = []; let ok = 0, bad = 0, rejected = 0, skipped = 0, n = 0
     const t0 = nowMs(); const deadline = t0 + SECONDS * 1000
     const byKind = { list: 0, detail: 0, addCart: 0, cart: 0 }
 
@@ -79,7 +90,11 @@ const main = async () => {
         let res
         if (r < 0.50) { res = await call('/api/shop/products?size=8&page=1'); byKind.list++ }
         else if (r < 0.75) { res = await call('/api/shop/products/' + pid); byKind.detail++ }
-        else if (r < 0.90) { res = await call('/api/shop/cart', { method: 'POST', body: { productId: pid, qty: 1 } }); byKind.addCart++ }
+        else if (r < 0.90) {
+          const sid = skuMap[pid]
+          if (!sid) { skipped++; continue }   // 无有货规格：跳过，不计入任何统计
+          res = await call('/api/shop/cart', { method: 'POST', body: { productId: pid, skuId: sid, qty: 1 } }); byKind.addCart++
+        }
         else { res = await call('/api/shop/cart'); byKind.cart++ }
         n++; lat.push(res.ms)
         if (res.status >= 500 || res.status === 0) bad++; else if (res.status >= 400) rejected++; else ok++
@@ -92,7 +107,7 @@ const main = async () => {
     const rps = n / dur
     const errRate = n ? bad / n : 0            // 仅 5xx 与网络失败计入故障率
     const p = { p50: pct(lat, 0.5), p95: pct(lat, 0.95), p99: pct(lat, 0.99) }
-    report.levels.push({ level, seconds: Number(dur.toFixed(1)), requests: n, rps: Number(rps.toFixed(1)), ok, bad, rejected, rejectRate: Number((n ? rejected / n : 0).toFixed(4)), errRate: Number(errRate.toFixed(4)), ...p, mix: byKind })
+    report.levels.push({ level, seconds: Number(dur.toFixed(1)), requests: n, rps: Number(rps.toFixed(1)), ok, bad, rejected, skipped, rejectRate: Number((n ? rejected / n : 0).toFixed(4)), errRate: Number(errRate.toFixed(4)), ...p, mix: byKind })
     if (p.p95 > worst.p95) worst = { level, p95: p.p95, errRate, rps }
     console.log(`  并发 ${String(level).padStart(3)} │ 请求 ${String(n).padStart(6)} │ ${rps.toFixed(0).padStart(5)} req/s │ P50 ${String(p.p50).padStart(4)}ms P95 ${String(p.p95).padStart(4)}ms P99 ${String(p.p99).padStart(4)}ms │ 故障 ${(errRate * 100).toFixed(2)}% 拒绝 ${((n ? rejected / n : 0) * 100).toFixed(1)}%`)
   }
