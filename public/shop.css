@@ -283,3 +283,40 @@ body.shop [style*="rgba(255,244,216"], body.shop [style*="rgba(247,205,124"] {
   background: transparent !important;
 }
 body.shop .img-main { background: #fafafa; }
+
+/* ── 第三轮：采用作品站真实配色（浅底 + 蓝色主色）──
+   作品站用色：主蓝 #0369a1 / 亮蓝 #0284c7 / 靛蓝 #4338ca · 浅蓝底 #eef2f8
+              次要文字 #5a6a7f / #7c8ba1 · 强调点缀 #fbbf24 */
+body.shop {
+  --fg: #0f172a;
+  --sub: #5a6a7f;
+  --dim: #7c8ba1;
+  --hair: #e2e8f0;
+  --hair-strong: #cbd5e1;
+  --accent: #0369a1;
+  --accent-hover: #0284c7;
+  color: #0f172a;
+  background: #ffffff;
+  background-image:
+    radial-gradient(50rem 30rem at 10% -10%, rgba(3,105,161,.06), transparent 60%),
+    radial-gradient(45rem 28rem at 92% 2%, rgba(67,56,202,.05), transparent 62%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+/* 主按钮：蓝色（与作品站链接/按钮一致） */
+body.shop .btn-primary, body.shop .primary, body.shop #addBtn, body.shop #submitOrder, body.shop #doLogin {
+  background: #0369a1; border-color: #0369a1; color: #ffffff;
+}
+body.shop .btn-primary:hover, body.shop .primary:hover, body.shop #addBtn:hover { background: #0284c7; border-color: #0284c7; }
+/* 链接与强调 */
+body.shop a, body.shop .price { color: #0369a1; }
+body.shop .navbtn.on { color: #0369a1; border-bottom-color: #0369a1; }
+body.shop .navbtn:hover { color: #0369a1; }
+/* 输入聚焦：蓝色描边 */
+body.shop input:focus, body.shop select:focus, body.shop textarea:focus { outline-color: #0284c7; border-color: #0284c7; }
+/* 次要文字与底色 */
+body.shop .muted, body.shop .dim { color: #7c8ba1; }
+body.shop .hero, body.shop .tiles .tile, body.shop .promise, body.shop .panel { background: #ffffff; border-color: #e2e8f0; }
+body.shop .hero { background: #f8fafc; }
+body.shop .badge { background: #eef2f8; border-color: #cbd5e1; color: #5a6a7f; }
+body.shop .badge.ok { background: #eef2f8; border-color: #0369a1; color: #0369a1; }
