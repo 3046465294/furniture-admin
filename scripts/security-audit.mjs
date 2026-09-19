@@ -189,6 +189,11 @@ console.log('\n【8】登录限流与锁定')
   }
   // 断言口径：实现可以是响应 429，也可以是返回 401 同时累计失败次数（达到阈值后锁定）
   check('HIGH', '连续错误口令被限制（429 或失败计数达阈值）', last === 429 || lastFailed >= 5, `最后一次 HTTP ${last}，失败计数 ${lastFailed}`)
+  // 本节会把用于探测的账号锁死；若不解除，后面「越权检查」用同一账号登录必然 429（审计自我妨碍）
+  try {
+    const { clearLoginFailures } = await import('../src/auth.js');
+    for (const u of ['demo', 'admin', 'viewer', 'buyer01']) { try { clearLoginFailures(u) } catch {} }
+  } catch {}
 }
 
 console.log('\n【9】网关运维接口保护')
