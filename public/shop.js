@@ -11,7 +11,15 @@ async function api(path, { method = 'GET', body } = {}) {
   const o = { method, credentials: 'same-origin', headers: {} };
   if (body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
   if (method !== 'GET') o.headers['X-Requested-With'] = 'fetch';
-  const res = await fetch(bustPath(path, method), o);
+  let res;
+  try {
+    res = await fetch(bustPath(path, method), o);
+  } catch (e) {
+    // 网络层失败（断网、DNS、被拦截）：归一成 status 0，让调用方能区分"网络问题"与"业务错误"
+    const err = new Error('网络不可用，请检查连接后重试');
+    err.status = 0;
+    throw err;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
   return data;
@@ -648,7 +656,26 @@ async function route() {
     else if (path === '/account') await viewAccount();
     else await viewHome();
   } catch (e) {
-    main.innerHTML = `<div class="empty-state"><b>出错了</b>${esc(e.message)}</div>`;
+    // 401：会话过期 —— 直接引导重新登录，而不是抛一个技术错误
+    if (e.status === 401) {
+      toast('登录已过期，请重新登录');
+      await viewAccount('登录已过期，请重新登录');
+      return;
+    }
+    // 404：内容不存在（商品下架 / 链接失效）—— 给出回到列表的出口
+    if (e.status === 404) {
+      main.innerHTML = `<div class="empty-state"><b>找不到该内容</b>商品可能已下架，或链接不正确<br><br><a class="btn ghost" href="#/list">去看看其它商品</a></div>`;
+      return;
+    }
+    // 其它（含网络失败）：明确说明并提供重试，而不是留一片空白
+    const netIssue = e.status === 0;
+    main.innerHTML = `<div class="empty-state">
+      <b>${netIssue ? '网络不可用' : '加载失败'}</b>
+      ${esc(e.message || '请稍后重试')}<br><br>
+      <button class="btn primary" id="retryBtn">重试</button>
+      ${netIssue ? '<p class="muted" style="margin-top:14px">离线时仍可浏览已缓存过的页面</p>' : ''}
+    </div>`;
+    $('retryBtn')?.addEventListener('click', () => route());
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
