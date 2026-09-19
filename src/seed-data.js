@@ -51,6 +51,26 @@ export function isBusinessDataEmpty(db) {
  * 注意：只清业务表（商品/分类/订单/审计），**不动 users 与会话**，
  * 否则演示者每次重置都会被踢下线。
  */
+/**
+ * 重置覆盖率自检：任何"引用 products / orders"的表如果没有出现在重置清单里，
+ * 删除时就会触发 FOREIGN KEY constraint failed（曾导致后台每 10 分钟崩一次）。
+ * 启动与重置时都会检查，缺表直接告警 —— 用机制代替记忆。
+ */
+const RESET_TABLES = ["shipments", "refunds", "order_items", "payments", "stock_movements", "reviews",
+  "product_images", "product_skus", "cart_items", "carts", "orders", "products", "categories", "audit_log"];
+export function resetCoverageIssues(db) {
+  try {
+    const tables = db.prepare("select name, sql from sqlite_master where type = 'table'").all();
+    const missing = [];
+    for (const t of tables) {
+      if (!t.sql) continue;
+      if (RESET_TABLES.includes(t.name)) continue;
+      if (/references\s+(products|orders)/i.test(t.sql)) missing.push(t.name);
+    }
+    return missing;
+  } catch { return []; }
+}
+
 export function resetDemoData(db, { force = false } = {}) {
   if (!force && !isBusinessDataEmpty(db)) return null;
 

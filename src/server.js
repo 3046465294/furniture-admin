@@ -19,7 +19,7 @@ import {
   parseCookies, sessionCookieHeader, clearCookieHeader, SESSION_COOKIE,
 } from './auth.js';
 import { recordRequest, snapshot, addSseClient, startMetricsTicker, prometheusText, recentLogEntries, sseClientCount, pushLog, broadcast } from './metrics.js';
-import { resetDemoData, isBusinessDataEmpty } from './seed-data.js';
+import { resetDemoData, isBusinessDataEmpty, resetCoverageIssues } from './seed-data.js';
 import { ensureAlertRules, evaluateAlerts, getRules, setRule, activeAlerts, alertHistory, onAlertChange } from './alerts.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -638,6 +638,13 @@ onAlertChange((ev) => {
 });
 
 ensureAlertRules();
+
+// 启动期自检：重置清单是否覆盖了所有引用 products/orders 的表（缺表 = 未来必崩）
+{
+  const missing = resetCoverageIssues(db);
+  if (missing.length) console.warn('[启动自检] 重置清单缺表：' + missing.join(', ') + '（请补进 RESET_TABLES，否则演示重置会因外键失败而崩）');
+  else console.log('[启动自检] 重置覆盖率完整（14 张表）');
+}
 
 // 告警判定必须独立于「有没有人开着监控面板」。
 // 踩过的坑：一开始把判定塞在 SSE 推送的 enrich 里，而推送在没有订阅者时会直接 return，

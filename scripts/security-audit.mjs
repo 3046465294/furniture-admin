@@ -71,6 +71,12 @@ try {
     .run(PROBE.u, '审计探针账号', hashPassword(PROBE.p))
   d.close()
   console.log('  [setup] 限流探针账号就绪：' + PROBE.u)
+  // 越权检查用的顾客探针账号（每轮唯一）：商城登录仅允许 customer/admin，故用 customer 角色
+  const VIEWPROBE = { u: 'audit_cust_' + Date.now().toString(36), p: 'Cust@' + Date.now().toString(36) }
+  globalThis.__VIEWPROBE = VIEWPROBE
+  d.prepare("insert into users(username,display_name,password_hash,role,active,created_at) values (?,?,?,'customer',1,datetime('now')) on conflict(username) do update set password_hash=excluded.password_hash, active=1")
+    .run(VIEWPROBE.u, '审计顾客探针', hashPassword(VIEWPROBE.p))
+  console.log('  [setup] 越权探针账号就绪：' + VIEWPROBE.u)
 } catch (e) { console.log('  [setup] 探针账号创建失败（将导致限流检查失败）: ' + e.message) }
 
 console.log('======== AURUM 安全审计 ========')
@@ -103,7 +109,8 @@ for (const [base, path, body, label] of [
 }
 
 console.log('\n【3】越权（只读账号不得写/管用户）')
-const viewerCookie = await login(S, VIEWER.u, VIEWER.p)
+const VIEWPROBE = globalThis.__VIEWPROBE
+const viewerCookie = await login(S, VIEWPROBE.u, VIEWPROBE.p)
 if (viewerCookie) {
   const r1 = await req(S, '/api/shop/cart', { method: 'POST', json: { productId: 1, qty: 1 }, cookie: viewerCookie })
   check('MED', 'viewer 加购（前台业务允许）', r1.status === 200 || r1.status === 409, `HTTP ${r1.status}`)
