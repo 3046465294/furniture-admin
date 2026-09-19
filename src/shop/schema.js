@@ -138,6 +138,44 @@ export function ensureSkus() {
   return { created: noSku.length, cartsFixed: fixed };
 }
 
+/** 游客购物车：按浏览器生成的 guest_key 取（没有则创建） */
+export function cartOfGuest(guestKey) {
+  if (!guestKey) return null;
+  let row = db.prepare('select * from carts where guest_key = ? and user_id is null order by id desc limit 1').get(guestKey);
+  if (!row) {
+    const r = db.prepare('insert into carts(user_id, guest_key, created_at, updated_at) values (null, ?, ?, ?)').run(guestKey, now(), now());
+    row = { id: Number(r.lastInsertRowid), guest_key: guestKey, user_id: null };
+  }
+  return row.id;
+}
+
+/** 登录/注册后把游客车合并进用户车（同规格累加数量，受库存上限约束） */
+export function mergeGuestCart(guestKey, userId) {
+  if (!guestKey) return { merged: 0 };
+  const guest = db.prepare('select * from carts where guest_key = ? and user_id is null order by id desc limit 1').get(guestKey);
+  if (!guest) return { merged: 0 };
+  const target = cartOf(userId);
+  const items = db.prepare('select * from cart_items where cart_id = ?').all(guest.id);
+  let merged = 0;
+  for (const it of items) {
+    const exist = db.prepare('select * from cart_items where cart_id = ? and ifnull(sku_id, -1) = ifnull(?, -1)').get(target, it.sku_id);
+    const stock = it.sku_id
+      ? (db.prepare('select stock from product_skus where id = ?').get(it.sku_id)?.stock ?? 0)
+      : (db.prepare('select stock from products where id = ?').get(it.product_id)?.stock ?? 0);
+    if (exist) {
+      const qty = Math.min(stock, exist.qty + it.qty);
+      if (qty > 0) db.prepare('update cart_items set qty = ? where id = ?').run(qty, exist.id);
+    } else if (stock > 0) {
+      db.prepare('insert into cart_items(cart_id, product_id, sku_id, qty, added_at) values (?,?,?,?,?)')
+        .run(target, it.product_id, it.sku_id, Math.min(stock, it.qty), now());
+    }
+    merged++;
+  }
+  db.prepare('delete from cart_items where cart_id = ?').run(guest.id);
+  db.prepare('delete from carts where id = ?').run(guest.id);
+  return { merged };
+}
+
 /** 某商品的全部规格 */
 export function skusOf(productId) {
   return db.prepare('select * from product_skus where product_id = ? and status = 1 order by id').all(productId);
@@ -168,6 +206,7 @@ create table if not exists shipping_templates (
 );
 `);
 try { db.exec('alter table orders add column goods_cents integer'); } catch { /* 已存在 */ }
+try { db.exec('alter table carts add column guest_key text'); } catch { /* 已存在 */ }
 try { db.exec('alter table orders add column shipping_cents integer'); } catch { /* 已存在 */ }
 
 /** 幂等种子：三档运费模板（默认免运费，保证演示环境可预期） */

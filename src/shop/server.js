@@ -21,7 +21,7 @@ import {
 import { recordRequest, snapshot, prometheusText } from '../metrics.js';
 import {
   cartOf, cartItems, moveStock, ORDER_STATUS, ORDER_FLOW, now,
-  ensureSkus, skusOf, imagesOf, syncProductStock, ensureShippingTemplates, quoteShipping,
+  ensureSkus, skusOf, imagesOf, syncProductStock, ensureShippingTemplates, quoteShipping, cartOfGuest, mergeGuestCart,
 } from './schema.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -87,6 +87,22 @@ const requireCustomer = (ctx) => {
   if (!c) { json(ctx.res, 401, { error: '请先登录' }); return null; }
   return c;
 };
+
+// ── 游客购物车：用 HttpOnly Cookie 保存 guest_key，登录后自动合并 ──
+const GUEST_COOKIE = 'fa_guest';
+function guestKeyOf(req, res) {
+  const cur = parseCookies(req.headers.cookie ?? '')[GUEST_COOKIE];
+  if (cur) return cur;
+  const key = randomUUID();
+  res.setHeader('Set-Cookie', `${GUEST_COOKIE}=${key}; Path=/; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; SameSite=Lax`);
+  return key;
+}
+/** 已登录用用户车，未登录用游客车（这样加购不再强制登录） */
+function resolveCartId(ctx) {
+  const c = customerOf(ctx.user);
+  if (c) return cartOf(c.id);
+  return cartOfGuest(guestKeyOf(ctx.req, ctx.res));
+}
 
 // ─────────────────── 商品（公开只读） ───────────────────
 function publicProducts(sp) {
@@ -154,6 +170,7 @@ route('POST', '/api/shop/register', async ({ req, res, body, ip }) => {
   const uid = Number(r.lastInsertRowid);
   db.prepare('insert into customers(user_id, nickname, phone, created_at) values (?,?,?,?)').run(uid, str(body.nickname, 30) || username, str(body.phone, 20), now());
   audit(username, 'shop_register', `user#${uid}`, '前台注册', ip);
+  try { const gk = parseCookies(req.headers.cookie ?? '')[GUEST_COOKIE]; if (gk) mergeGuestCart(gk, uid); } catch {}
   const { token, expires } = createSession({ id: uid }, ip, req.headers['user-agent']);
   return json(res, 201, { ok: true }, { 'Set-Cookie': sessionCookieHeader(token, expires, isSecure(req)) });
 });
@@ -169,9 +186,10 @@ route('POST', '/api/shop/login', async ({ req, res, body, ip }) => {
     return json(res, 401, { error: '用户名或密码错误', failed: st.count });
   }
   clearLoginFailures(key);
+  try { const gk = parseCookies(req.headers.cookie ?? '')[GUEST_COOKIE]; if (gk) mergeGuestCart(gk, user.id); } catch {}
   const { token, expires } = createSession(user, ip, req.headers['user-agent']);
   audit(user.username, 'shop_login', 'session', '', ip);
-  return json(res, 200, { user: { username: user.username, nickname: user.display_name } }, { 'Set-Cookie': sessionCookieHeader(token, expires, isSecure(req)) });
+  return json(res, 200, { user: { username: user.username, nickname: user.display_name } }, { 'Set-Cookie': [sessionCookieHeader(token, expires, isSecure(req)), `${GUEST_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`] });
 });
 route('POST', '/api/shop/logout', async ({ req, res, cookies }) => {
   destroySession(cookies[SESSION_COOKIE]);
@@ -193,9 +211,9 @@ const cartPayload = (userId) => {
 };
 // 运费报价：结算页据此实时显示运费与应付金额
 route('POST', '/api/shop/shipping/quote', async (ctx) => {
-  const c = requireCustomer(ctx); if (!c) return;
+  const cartId = resolveCartId(ctx);
   const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), c.id);
-  const items = cartItems(cartOf(c.id));
+  const items = cartItems(cartId);
   const goods = items.reduce((a, b) => a + b.subtotal_cents, 0);
   const count = items.reduce((a, b) => a + b.qty, 0);
   const q = quoteShipping(addr ? (String(addr.region) + ' ' + String(addr.detail)) : '', goods, count);
@@ -206,12 +224,12 @@ route('POST', '/api/shop/shipping/quote', async (ctx) => {
 });
 
 route('GET', '/api/shop/cart', async (ctx) => {
-  const c = requireCustomer(ctx); if (!c) return;
+  const cartId = resolveCartId(ctx);
   return json(ctx.res, 200, cartPayload(c.id));
 });
 route('POST', '/api/shop/cart', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
-  const c = requireCustomer(ctx); if (!c) return;
+  const cartId = resolveCartId(ctx);
   const pid = int(ctx.body.productId, 1, 1e15, 0);
   const qty = int(ctx.body.qty, 1, 99, 1);
   const p = productById(pid);
@@ -220,7 +238,6 @@ route('POST', '/api/shop/cart', async (ctx) => {
   const skuList = skusOf(pid);
   const sku = ctx.body.skuId ? skuList.find((k) => k.id === int(ctx.body.skuId, 1, 1e15, 0)) : skuList[0];
   if (!sku) return json(ctx.res, 409, { error: "该商品暂无可售规格" });
-  const cartId = cartOf(c.id);
   const exist = db.prepare('select * from cart_items where cart_id = ? and ifnull(sku_id, -1) = ?').get(cartId, sku.id);
   const want = (exist?.qty ?? 0) + qty;
   if (want > sku.stock) return json(ctx.res, 409, { error: `「${sku.spec}」库存不足（剩 ${sku.stock} 件）` });
@@ -230,8 +247,8 @@ route('POST', '/api/shop/cart', async (ctx) => {
 });
 route('PUT', '/api/shop/cart/:id', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
-  const c = requireCustomer(ctx); if (!c) return;
-  const row = db.prepare('select * from cart_items where id = ? and cart_id = ?').get(int(ctx.params.id, 1, 1e15, 0), cartOf(c.id));
+  const cartId = resolveCartId(ctx);
+  const row = db.prepare('select * from cart_items where id = ? and cart_id = ?').get(int(ctx.params.id, 1, 1e15, 0), cartId);
   if (!row) return json(ctx.res, 404, { error: '购物车项不存在' });
   const qty = int(ctx.body.qty, 0, 99, 1);
   if (qty === 0) { db.prepare('delete from cart_items where id = ?').run(row.id); return json(ctx.res, 200, cartPayload(c.id)); }
@@ -242,8 +259,8 @@ route('PUT', '/api/shop/cart/:id', async (ctx) => {
 });
 route('DELETE', '/api/shop/cart/:id', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
-  const c = requireCustomer(ctx); if (!c) return;
-  db.prepare('delete from cart_items where id = ? and cart_id = ?').run(int(ctx.params.id, 1, 1e15, 0), cartOf(c.id));
+  const cartId = resolveCartId(ctx);
+  db.prepare('delete from cart_items where id = ? and cart_id = ?').run(int(ctx.params.id, 1, 1e15, 0), cartId);
   return json(ctx.res, 200, cartPayload(c.id));
 });
 
