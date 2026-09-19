@@ -325,53 +325,104 @@ async function viewCheckout() {
   if (!cart.items.length) { location.hash = '#/cart'; return; }
   const def = addr.rows.find((a) => a.is_default) ?? addr.rows[0];
   main.innerHTML = `
-    <h2 style="font-size:20px;margin:6px 0 16px">确认订单</h2>
+    <div class="row-between" style="margin:6px 0 16px">
+      <h2 style="font-size:20px;margin:0">确认订单</h2>
+      <a class="muted" href="#/cart">← 返回购物车</a>
+    </div>
     <div class="detail">
-      <div class="panel stack">
-        <h3 style="margin:0 0 4px;font-size:15px">收货信息</h3>
-        <div class="row">
-          <select id="addrSel" style="flex:1">
-            ${addr.rows.length ? addr.rows.map((a) => `<option value="${a.id}" ${def && a.id === def.id ? 'selected' : ''}>${esc(a.receiver)} ${esc(a.phone)} — ${esc(a.region)} ${esc(a.detail)}</option>`).join('') : '<option value="">（还没有地址，请在下方新增）</option>'}
-          </select>
+      <div class="stack">
+        <div class="panel">
+          <div class="row-between" style="margin-bottom:12px">
+            <h3 style="margin:0;font-size:15px">收货地址</h3>
+            <button class="btn-ghost btn-sm" id="toggleAddr">+ 新增地址</button>
+          </div>
+          <div class="stack" id="addrList">
+            ${addr.rows.length ? addr.rows.map((a) => `
+              <label class="addr ${def && a.id === def.id ? 'on' : ''}" data-addr="${a.id}">
+                <input type="radio" name="addr" value="${a.id}" ${def && a.id === def.id ? 'checked' : ''} style="width:auto;margin-right:10px">
+                <span class="addr-body">
+                  <span class="addr-line"><b>${esc(a.receiver)}</b> <span class="muted">${esc(a.phone)}</span>${a.is_default ? ' <span class="badge ok">默认</span>' : ''}</span>
+                  <span class="addr-line muted">${esc(a.region)} ${esc(a.detail)}</span>
+                </span>
+              </label>`).join('') : '<p class="muted" style="margin:0">还没有收货地址，请先新增一个</p>'}
+          </div>
+          <div id="addrForm" hidden style="margin-top:14px;border-top:1px solid rgba(255,244,216,.1);padding-top:14px">
+            <div class="row" style="margin-bottom:10px">
+              <input id="aReceiver" placeholder="收货人" style="flex:1;min-width:120px">
+              <input id="aPhone" placeholder="手机号" style="flex:1;min-width:130px">
+            </div>
+            <div class="row" style="margin-bottom:10px">
+              <input id="aRegion" placeholder="省 / 市 / 区" style="flex:1;min-width:140px">
+              <input id="aDetail" placeholder="详细地址（街道、门牌）" style="flex:2;min-width:180px">
+            </div>
+            <div class="row">
+              <button class="btn primary btn-sm" id="saveAddr">保存并使用</button>
+              <button class="btn-ghost btn-sm" id="cancelAddr">取消</button>
+              <span class="muted" id="addrMsg"></span>
+            </div>
+          </div>
         </div>
-        <div class="muted">新增地址（保存后可用于下次下单）</div>
-        <div class="row">
-          <input id="aReceiver" placeholder="收货人" style="flex:1;min-width:120px">
-          <input id="aPhone" placeholder="手机号" style="flex:1;min-width:130px">
+        <div class="panel stack">
+          <h3 style="margin:0;font-size:15px">配送与备注</h3>
+          <div class="row">
+            <span class="dim" style="width:72px">送达时间</span>
+            <select id="deliverPref" style="width:auto">
+              <option value="">任意时间</option>
+              <option value="仅工作日送达">仅工作日送达</option>
+              <option value="仅周末送达">仅周末送达</option>
+              <option value="需提前电话联系">需提前电话联系</option>
+            </select>
+          </div>
+          <div class="row">
+            <span class="dim" style="width:72px">订单备注</span>
+            <input id="remark" placeholder="如：需要上门安装 / 放门口即可" style="flex:1">
+          </div>
+          <p class="muted" style="margin:0">配送偏好会合并写入订单备注，后台订单列表可直接看到。</p>
         </div>
-        <div class="row">
-          <input id="aRegion" placeholder="省 / 市 / 区" style="flex:1;min-width:140px">
-          <input id="aDetail" placeholder="详细地址（街道、门牌）" style="flex:2;min-width:180px">
-        </div>
-        <div class="row"><button class="btn-ghost" id="saveAddr">保存地址</button><span class="muted" id="addrMsg"></span></div>
-        <hr class="hr">
-        <h3 style="margin:0 0 4px;font-size:15px">订单备注</h3>
-        <input id="remark" placeholder="如：工作日送货 / 需要上门安装">
       </div>
       <div class="panel">
         <h3 style="margin:0 0 12px;font-size:15px">商品清单</h3>
-        ${cart.items.map((i) => `<div class="citem"><div class="mini">${initial(i.name)}</div>
-          <div><div class="nm">${esc(i.name)}</div><div class="dim">${money(i.price)} × ${i.qty}</div></div>
+        ${cart.items.map((i) => `<div class="citem">
+          <div class="mini">${initial(i.name)}</div>
+          <div><div class="nm">${esc(i.name)}</div><div class="dim">${esc(i.spec || '默认')} · ${money(i.price)} × ${i.qty}</div></div>
           <div class="sub">${money(i.subtotal)}</div></div>`).join('')}
-        <div class="row-between" style="margin-top:16px"><span>商品合计</span><b>${money(cart.total)}</b></div>
-        <div class="row-between"><span class="muted">运费</span><span class="muted">免运费（演示）</span></div>
-        <div class="row-between" style="margin:10px 0 16px"><span>应付</span><b style="color:var(--gold-2);font-size:22px">${money(cart.total)}</b></div>
+        <hr class="hr">
+        <div class="row-between"><span class="muted">商品合计</span><b>${money(cart.total)}</b></div>
+        <div class="row-between" style="margin-top:8px"><span class="muted">运费</span><span class="muted">免运费（演示环境）</span></div>
+        <div class="row-between" style="margin:14px 0 16px"><span>应付金额</span><b style="color:var(--gold-2);font-size:22px">${money(cart.total)}</b></div>
         <button class="btn-primary btn-block" id="submitOrder">提交订单</button>
-        <p class="muted" style="margin:12px 0 0">提交后生成订单（待付款），可在「我的订单」里完成模拟支付。演示环境不接入真实支付渠道。</p>
+        <p class="muted" style="margin:12px 0 0">提交后生成「待付款」订单，可在「我的订单」完成模拟支付。演示环境不接入真实支付渠道。</p>
       </div>
     </div>`;
+
+  const sel = () => Number(document.querySelector('input[name=addr]:checked')?.value ?? 0);
+  const addrList = $('addrList');
+  addrList.addEventListener('change', () => {
+    addrList.querySelectorAll('.addr').forEach((el) => el.classList.toggle('on', String(sel()) === el.dataset.addr));
+  });
+  $('toggleAddr').addEventListener('click', () => { const f = $('addrForm'); f.hidden = !f.hidden; });
+  $('cancelAddr').addEventListener('click', () => { $('addrForm').hidden = true; });
   $('saveAddr').addEventListener('click', async () => {
+    const receiver = $('aReceiver').value.trim();
+    const phone = $('aPhone').value.trim();
+    if (!receiver) return ($('addrMsg').textContent = '请填写收货人');
+    if (!/^\\d{6,20}$/.test(phone.replace(/[^0-9]/g, ''))) return ($('addrMsg').textContent = '手机号格式不正确');
     try {
-      await api('/api/shop/addresses', { method: 'POST', body: { receiver: $('aReceiver').value, phone: $('aPhone').value, region: $('aRegion').value, detail: $('aDetail').value, isDefault: true } });
+      await api('/api/shop/addresses', { method: 'POST', body: { receiver, phone, region: $('aRegion').value, detail: $('aDetail').value, isDefault: true } });
       toast('地址已保存'); viewCheckout();
-    } catch (e) { toast(e.message); }
+    } catch (e) { $('addrMsg').textContent = e.message; }
   });
   $('submitOrder').addEventListener('click', async () => {
-    const addressId = Number($('addrSel').value) || 0;
-    if (!addressId) { $('addrMsg').textContent = '请先新增并选择收货地址'; return; }
-    const btn = $('submitOrder'); btn.disabled = true; btn.textContent = '提交中…';
+    const addressId = sel();
+    if (!addressId) { toast('请选择收货地址'); return; }
+    const btn = $('submitOrder');
+    if (btn.disabled) return;                       // 防重复提交
+    btn.disabled = true; btn.textContent = '提交中…';
     try {
-      const r = await api('/api/shop/checkout', { method: 'POST', body: { addressId, remark: $('remark').value } });
+      const pref = $('deliverPref').value;
+      const note = $('remark').value.trim();
+      const remark = [pref, note].filter(Boolean).join(' / ');
+      const r = await api('/api/shop/checkout', { method: 'POST', body: { addressId, remark } });
       state.cart = await api('/api/shop/cart'); renderCartBadge();
       location.hash = '#/order/' + r.orderNo;
     } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '提交订单'; }

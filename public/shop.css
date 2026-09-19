@@ -145,3 +145,11 @@ button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed;
 .skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 16px; margin-top: 10px; }
 .skel-card { aspect-ratio: 4 / 3.6; border-radius: 18px; }
 @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+/* ── 结算页地址卡片 ── */
+.addr { display: flex; align-items: flex-start; gap: 2px; padding: 12px 14px; border: 1px solid var(--hair); border-radius: 14px; cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.addr:hover { border-color: var(--hair-strong); }
+.addr.on { border-color: var(--gold-2); background: rgba(247,205,124,.07); box-shadow: 0 0 0 3px rgba(247,205,124,.12); }
+.addr-body { display: flex; flex-direction: column; gap: 4px; }
+.addr-line { font-size: 13.5px; }
+.btn-block { width: 100%; }
+.btn-sm { padding: 6px 12px; font-size: 12.5px; }
