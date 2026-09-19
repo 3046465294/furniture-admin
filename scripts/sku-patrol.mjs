@@ -13,7 +13,7 @@
  *   ④ 补齐商品图（记录 + SVG 文件）
  * 若在售商品仍无可售规格，明确报错退出（不静默通过）。
  */
-import { db } from '../src/db.js'
+import { db, now } from '../src/db.js'
 import { ensureSkus, syncProductStock } from '../src/shop/schema.js'
 import { ensureProductImages } from './make-product-images.mjs'
 
@@ -37,6 +37,22 @@ try {
   `).all()
   for (const p of bad) syncProductStock(p.id)
 
+  // ③.5 恢复类目层级（重置会重建 categories 并丢掉 parent_id —— 第四类重置后遗症）
+  let catFixed = 0
+  {
+    const catTotal = db.prepare('select count(*) c from categories').get().c
+    const withParent = db.prepare('select count(*) c from categories where parent_id is not null').get().c
+    if (catTotal > 1 && withParent === 0) {
+      let root = db.prepare("select id from categories where name = '家居'").get()
+      if (!root) {
+        const r = db.prepare("insert into categories(name, sort, status, remark, parent_id, created_by, created_at, updated_by, updated_at) values ('家居',0,1,'根类目',null,'seed',?,'seed',?)").run(now(), now())
+        root = { id: Number(r.lastInsertRowid) }
+      }
+      const kids = db.prepare('select id from categories where id <> ? and parent_id is null').all(root.id)
+      for (const k of kids) { db.prepare('update categories set parent_id = ?, updated_at = ? where id = ?').run(root.id, now(), k.id); catFixed++ }
+    }
+  }
+
   // ④ 补齐商品图（重置会清空 product_images）
   const img = ensureProductImages()
 
@@ -46,18 +62,20 @@ try {
     where p.deleted = 0 and p.status = 1
       and not exists (select 1 from product_skus s where s.product_id = p.id and s.status = 1)
   `).get().c
+  const flatCats = db.prepare('select count(*) c from categories where parent_id is null').get().c
+  const allCats = db.prepare('select count(*) c from categories').get().c
   const missingImg = db.prepare(`
     select count(*) c from products p
     where p.deleted = 0 and p.status = 1
       and not exists (select 1 from product_images i where i.product_id = p.id)
   `).get().c
 
-  const changed = r.created || purged || bad.length || img.addedRows || img.addedFiles
+  const changed = r.created || purged || bad.length || img.addedRows || img.addedFiles || catFixed
   if (changed || missingSku || missingImg) {
-    console.log(`[${stamp()}] patrol: skusCreated=${r.created} cartPurged=${purged} stockSynced=${bad.length} imgRows=${img.addedRows} imgFiles=${img.addedFiles} missingSku=${missingSku} missingImg=${missingImg}`)
+    console.log(`[${stamp()}] patrol: skusCreated=${r.created} cartPurged=${purged} stockSynced=${bad.length} imgRows=${img.addedRows} imgFiles=${img.addedFiles} catFixed=${catFixed} missingSku=${missingSku} missingImg=${missingImg}`)
   }
-  if (missingSku > 0 || missingImg > 0) {
-    console.error(`[${stamp()}] patrol: WARNING 仍有 ${missingSku} 个商品无可售规格、${missingImg} 个商品无图`)
+  if (missingSku > 0 || missingImg > 0 || (allCats > 1 && flatCats === allCats)) {
+    console.error(`[${stamp()}] patrol: WARNING 仍有 ${missingSku} 个商品无可售规格、${missingImg} 个商品无图、类目层级 ${flatCats}/${allCats} 全为顶层`)
     process.exit(2)
   }
   process.exit(0)
