@@ -45,14 +45,18 @@ export const DEFAULT_RULES = [
   { id: 'p95_latency', name: 'P95 延迟过高', metric: 'p95', op: '>', threshold: 300, unit: 'ms' },
   { id: 'rss_memory', name: '内存占用过高', metric: 'rssMB', op: '>', threshold: 512, unit: 'MB' },
   { id: 'qps_spike', name: 'QPS 突增', metric: 'qps', op: '>', threshold: 200, unit: 'req/s' },
+  { id: 'low_stock', name: '低库存商品', metric: 'lowStockCount', op: '>', threshold: 0, unit: '件' },
 ];
 
 /** 首次启动写入默认规则 */
 export function ensureAlertRules() {
-  const n = db.prepare('select count(*) as c from alert_rules').get().c;
-  if (n > 0) return;
+  // 幂等补齐：像新增「低库存商品」这类规则，必须能补进已经跑起来的库
+  // （踩过的坑：原来只在表为空时写入，导致新规则永远进不去）
+  const exists = db.prepare('select id from alert_rules where id = ?');
   const ins = db.prepare('insert into alert_rules(id,name,metric,op,threshold,unit,enabled,updated_at) values (?,?,?,?,?,?,1,?)');
-  for (const r of DEFAULT_RULES) ins.run(r.id, r.name, r.metric, r.op, r.threshold, r.unit, now());
+  for (const r of DEFAULT_RULES) {
+    if (!exists.get(r.id)) ins.run(r.id, r.name, r.metric, r.op, r.threshold, r.unit, now());
+  }
 }
 
 export function getRules() {
@@ -73,6 +77,7 @@ export function setRule(id, patch) {
 
 const readMetric = (snap, metric) => {
   if (metric === 'p95') return snap.latency?.p95 ?? 0;
+  if (metric === 'lowStockCount') return snap.lowStockCount ?? 0;   // 业务指标：低库存商品数
   return snap[metric] ?? 0;
 };
 

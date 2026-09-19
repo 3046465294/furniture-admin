@@ -262,6 +262,12 @@ $('cAdd').addEventListener('click', async () => {
 const ORDER_STATUS = { pending: '待付款', paid: '已付款', shipped: '已发货', done: '已完成', cancelled: '已取消' };
 // 与服务端 ORDER_FLOW 保持一致的前端镜像（仅用于渲染可选动作，真正的校验在服务端）
 const ORDER_FLOW = { pending: ['paid', 'cancelled'], paid: ['shipped', 'cancelled'], shipped: ['done'], done: [], cancelled: [] };
+// 运营侧动作：与前台不同，这里多了「发货 / 完成 / 退款」
+const ORDER_ACT = {
+  paid: [{ act: 'ship', label: '发货', tip: '填写快递单号并发货' }, { act: 'refund', label: '退款', tip: '退款并回补库存' }],
+  shipped: [{ act: 'complete', label: '确认完成', tip: '签收并完结订单' }, { act: 'refund', label: '退款', tip: '退款并回补库存' }],
+  done: [{ act: 'refund', label: '退款', tip: '售后退款并回补库存' }],
+};
 async function loadOrders() {
   const q = new URLSearchParams({ page: state.oPage, size: state.oSize });
   if ($('oStatus').value) q.set('status', $('oStatus').value);
@@ -270,6 +276,7 @@ async function loadOrders() {
     <tr><td>${esc(o.orderNo)}</td><td>${esc(o.customer)}</td><td>${esc(o.phone)}</td>
     <td class="num">¥${o.total.toFixed(2)}</td><td class="num">${o.itemCount}</td>
     <td><span class="badge ${o.status === 'done' ? 'ok' : o.status === 'cancelled' ? 'off' : 'warn'}">${ORDER_STATUS[o.status] ?? o.status}</span>
+      <span class="tools" style="margin-left:8px">${state.user?.role === 'viewer' ? '' : ((ORDER_ACT[o.status] ?? []).map((a) => `<button data-oact="${o.id}:${a.act}" title="${a.tip}">${a.label}</button>`).join('') || '<span class="dim">—</span>')}</span>
       <span class="tools" style="margin-left:8px">${state.user?.role === 'viewer' ? '' : ((ORDER_FLOW[o.status] ?? []).map((s) => `<button data-ost="${o.id}:${s}" title="流转到「${ORDER_STATUS[s]}」">→ ${ORDER_STATUS[s]}</button>`).join('') || '<span class="dim">—</span>')}</span></td>
     <td class="dim">${esc(o.createdAt)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">暂无订单</td></tr>';
   $('oInfo').textContent = `共 ${r.total} 条`;
@@ -544,6 +551,37 @@ async function boot() {
   [80, 250, 700, 1600, 3200].forEach((ms) => setTimeout(sync, ms));
 })();
 
+
+// ══════════ 订单履约（后台运营动作）══════════
+// 与前台的状态机配套：前台负责支付/取消，后台负责发货/完成/退款。
+(function orderOps() {
+  const body = document.getElementById('oBody');
+  if (!body) return;
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-oact]');
+    if (!b) return;
+    const [id, act] = b.dataset.oact.split(':');
+    let payload = {};
+    if (act === 'ship') {
+      const tracking = prompt('快递单号（可留空，仅记录发货）', '');
+      if (tracking === null) return;
+      const carrier = prompt('快递公司', '顺丰速运') || '顺丰速运';
+      payload = { tracking, carrier };
+    } else if (act === 'refund') {
+      const reason = prompt('退款原因', '客户申请退款');
+      if (reason === null) return;
+      payload = { reason };
+      if (!confirm('确认退款？库存会自动回补，支付状态标记为已退款。')) return;
+    } else if (act === 'complete') {
+      if (!confirm('确认该订单已完成（已签收）？')) return;
+    }
+    b.disabled = true;
+    try {
+      await api('/api/orders/' + id + '/' + act, { method: 'POST', body: payload });
+      loadOrders();
+    } catch (err) { alert(err.message); loadOrders(); }
+  });
+})();
 
 // ══════════ 趋势页：把 SSE 每秒指标累积成长期曲线 ══════════
 // 为什么这么做：Prometheus/Grafana 那套要另起两个服务、还要下载几百 MB；

@@ -26,7 +26,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, '..', 'public');
 const PORT = Number(process.env.PORT ?? 8090);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
+/** 低库存阈值（可入库配置，这里先给默认值） */
+const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD ?? 5);
 const MAX_BODY = 256 * 1024;
 const STARTED_AT = Date.now();
 
@@ -317,7 +319,8 @@ route('GET', '/api/system/health', async ({ res }) => json(res, 200, {
   node: process.version, tables: tableCounts(), dbKB: dbSizeKB(), sessions: activeSessionCount(),
 }));
 route('GET', '/api/system/metrics', guard(async ({ res }) =>
-  json(res, 200, { ...snapshot(), sessions: activeSessionCount(), sseClients: sseClientCount(), tables: tableCounts(), dbKB: dbSizeKB() })));
+  json(res, 200, { ...snapshot(), sessions: activeSessionCount(), sseClients: sseClientCount(), tables: tableCounts(), dbKB: dbSizeKB(),
+    lowStockCount: db.prepare('select count(*) c from products where deleted = 0 and status = 1 and stock <= ?').get(LOW_STOCK_THRESHOLD).c })));
 // Prometheus 端点：机器抓取无法携带会话 Cookie，因此支持静态 Bearer 令牌（METRICS_TOKEN）。
 // 设计取舍：设了令牌就只认令牌（避免两个入口都开着）；没设令牌则回落到会话鉴权，本地开发方便。
 route('GET', '/api/system/metrics.prom', async ({ req, res, user }) => {
@@ -462,6 +465,71 @@ route('PUT', '/api/categories/:id', guard(async ({ req, res, body, params, user,
   return json(res, 200, { ok: true });
 }, 'write'));
 
+/** 库存回补（后台侧）：与前台 shop/schema.js 的 moveStock 语义一致，都写 stock_movements 留痕 */
+function moveStockDb(productId, delta, reason, ref) {
+  if (!productId) return;
+  db.prepare('update products set stock = stock + ?, updated_at = ? where id = ?').run(delta, now(), productId);
+  db.prepare('insert into stock_movements(product_id, delta, reason, ref, created_at) values (?,?,?,?,?)').run(productId, delta, reason, ref, now());
+}
+
+// ── 二期补充：订单履约（发货 / 完成 / 退款）──
+// 前台只能「支付」与「取消」；发货、完成、退款是运营动作，只存在于后台。
+route('POST', '/api/orders/:id/ship', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: "缺少 X-Requested-With" });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const o = db.prepare('select * from orders where id = ? and deleted = 0').get(id);
+  if (!o) return json(res, 404, { error: '订单不存在' });
+  if (o.status !== 'paid') return json(res, 409, { error: '只有「已付款」的订单可以发货（当前：' + (ORDER_LABEL[o.status] ?? o.status) + '）' });
+  const tracking = str(body.tracking, 60);
+  const carrier = str(body.carrier, 30) || '顺丰速运';
+  db.exec("begin");
+  try {
+    db.prepare('update orders set status = \'shipped\', remark = ?, updated_by = ?, updated_at = ? where id = ?')
+      .run((o.remark ? o.remark + ' / ' : '') + '快递：' + carrier + (tracking ? ' ' + tracking : ''), user.username, now(), id);
+    db.prepare('insert into shipments(order_id, carrier, tracking_no, status, created_by, created_at, updated_at) values (?,?,?,?,?,?,?)')
+      .run(id, carrier, tracking, 'shipped', user.username, now(), now());
+    db.exec("commit");
+  } catch (e) { db.exec("rollback"); return json(res, 500, { error: "发货失败：" + e.message }); }
+  audit(user.username, 'order_ship', 'order#' + id, o.order_no + ' / ' + carrier + ' ' + tracking, ip);
+  return json(res, 200, { ok: true, carrier, tracking });
+}, 'write'));
+
+route('POST', '/api/orders/:id/complete', guard(async ({ req, res, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: "缺少 X-Requested-With" });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const o = db.prepare('select * from orders where id = ? and deleted = 0').get(id);
+  if (!o) return json(res, 404, { error: '订单不存在' });
+  if (o.status !== 'shipped') return json(res, 409, { error: '只有「已发货」的订单可以确认完成（当前：' + (ORDER_LABEL[o.status] ?? o.status) + '）' });
+  db.prepare("update orders set status = 'done', updated_by = ?, updated_at = ? where id = ?").run(user.username, now(), id);
+  db.prepare("update shipments set status = 'delivered', updated_at = ? where order_id = ?").run(now(), id);
+  audit(user.username, 'order_complete', 'order#' + id, o.order_no, ip);
+  return json(res, 200, { ok: true });
+}, 'write'));
+
+route('POST', '/api/orders/:id/refund', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: "缺少 X-Requested-With" });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const o = db.prepare('select * from orders where id = ? and deleted = 0').get(id);
+  if (!o) return json(res, 404, { error: '订单不存在' });
+  if (!['paid', 'shipped', 'done'].includes(o.status)) return json(res, 409, { error: '当前状态不可退款（' + (ORDER_LABEL[o.status] ?? o.status) + '）' });
+  const reason = str(body.reason, 100) || '运营退款';
+  const items = db.prepare("select * from order_items where order_id = ?").all(id);
+  db.exec("begin");
+  try {
+    db.prepare("update orders set status = 'cancelled', remark = ?, updated_by = ?, updated_at = ? where id = ?")
+      .run((o.remark ? o.remark + ' / ' : '') + '已退款：' + reason, user.username, now(), id);
+    for (const it of items) {
+      moveStockDb(it.product_id, it.qty, '退款回补', o.order_no);
+    }
+    db.prepare("update payments set status = 'refunded' where order_id = ?").run(id);
+    db.prepare('insert into refunds(order_id, amount_cents, reason, operator, created_at) values (?,?,?,?,?)')
+      .run(id, o.total_cents, reason, user.username, now());
+    db.exec("commit");
+  } catch (e) { db.exec("rollback"); return json(res, 500, { error: "退款失败：" + e.message }); }
+  audit(user.username, 'order_refund', 'order#' + id, o.order_no + ' / ' + reason, ip);
+  return json(res, 200, { ok: true, refunded: o.total_cents / 100 });
+}, 'write'));
+
 // ── 三期：告警规则与历史 ──
 route('GET', '/api/system/alerts', guard(async ({ res }) => json(res, 200, {
   rules: getRules(), active: activeAlerts(), history: alertHistory(30),
@@ -542,7 +610,11 @@ let nextResetAt = Date.now() + RESET_INTERVAL_MS;
 // enrich：把需要查库/进程信息的字段补进 SSE 推送里，否则面板上的「在线会话 / 数据库 / Node」会是空的
 startMetricsTicker(1000, (snap) => {
   try { evaluateAlerts(snap); } catch {}
+  // 业务侧指标：低库存商品数（库存 ≤ 阈值且在上架），交给告警引擎判定
+  let lowStock = 0;
+  try { lowStock = db.prepare("select count(*) c from products where deleted = 0 and status = 1 and stock <= ?").get(LOW_STOCK_THRESHOLD).c; } catch {}
   return {
+    lowStockCount: lowStock,
     sessions: activeSessionCount(),
     dbKB: dbSizeKB(),
     sseClients: sseClientCount(),
