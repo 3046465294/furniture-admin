@@ -438,7 +438,7 @@ export function sweepExpiredOrders(nowMs = Date.now()) {
   const rows = db.prepare(`
     select id, order_no, created_at from orders
     where deleted = 0 and status = 'pending'
-      and (julianday(created_at) * 86400000) < ?
+      and ((julianday(created_at) - 2440587.5) * 86400000) < ?
     order by id limit 50
   `).all(deadline);
   const done = [];
