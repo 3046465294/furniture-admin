@@ -1,0 +1,109 @@
+/* ═══════════════════════════════════════════════════════
+   AURUM 商城前台 —— 克制的液态玻璃（Apple 式）
+   与后台共用同一套设计令牌（style.css 的 :root），这里只做前台特有布局。
+   原则：玻璃只用于"浮层与容器"，内容区保持安静；动效只表达层级与反馈。
+   ═══════════════════════════════════════════════════════ */
+
+body.shop, body.admin { margin: 0; }
+.shop-main { max-width: 1180px; margin: 0 auto; padding: 26px 20px 90px; min-height: 60vh; }
+
+/* 顶栏：一条安静的玻璃 */
+.shop-head {
+  position: sticky; top: 10px; z-index: 30;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  max-width: 1180px; margin: 10px auto 0; padding: 12px 18px;
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(255, 244, 216, 0.085), rgba(255, 244, 216, 0.035));
+  backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid var(--hair);
+  box-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.shop-brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; }
+.logo-sm { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 11px; }
+.logo-sm svg { width: 20px; height: 20px; }
+.shop-name { font-size: 15.5px; font-weight: 650; letter-spacing: 0.04em; }
+.shop-name em { font-style: normal; font-weight: 400; color: var(--sub); font-size: 12.5px; margin-left: 7px; letter-spacing: 0.08em; }
+.shop-search { display: flex; gap: 8px; flex: 1; min-width: 220px; }
+.shop-search input { flex: 1; }
+.shop-nav { display: flex; gap: 2px; align-items: center; padding: 4px; border-radius: 14px; background: rgba(6, 5, 3, 0.3); border: 1px solid rgba(255, 244, 216, 0.08); position: relative; }
+.shop-nav .navbtn { padding: 8px 13px; border-radius: 11px; color: var(--sub); font-size: 13.5px; text-decoration: none; transition: color 0.25s var(--ease), background 0.25s var(--ease); display: inline-flex; align-items: center; gap: 6px; }
+.shop-nav .navbtn:hover { color: var(--fg); background: rgba(255, 244, 216, 0.06); }
+.shop-nav .navbtn.on { color: var(--fg); font-weight: 600; background: linear-gradient(150deg, rgba(255, 244, 216, 0.16), rgba(255, 244, 216, 0.06)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+.badge-n { background: linear-gradient(135deg, var(--gold-1), var(--gold-3)); color: #2a1c07; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; }
+
+/* 首页 hero：一句话 + 一行数据，不堆特效 */
+.hero { padding: 30px 4px 12px; }
+.hero h1 { font-size: 30px; font-weight: 660; letter-spacing: -0.02em; margin: 0 0 10px; }
+.hero p { color: var(--sub); margin: 0 0 16px; font-size: 14.5px; max-width: 620px; }
+.hero-stats { display: flex; gap: 26px; flex-wrap: wrap; color: var(--sub); font-size: 13px; }
+.hero-stats b { color: var(--fg); font-size: 17px; font-variant-numeric: tabular-nums; margin-right: 5px; }
+
+/* 分类 chips */
+.chips { display: flex; gap: 9px; overflow-x: auto; padding: 14px 2px; scrollbar-width: thin; }
+.chip { white-space: nowrap; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 244, 216, 0.04); color: var(--sub); font-size: 13px; cursor: pointer; text-decoration: none; transition: all 0.22s var(--ease); }
+.chip:hover { color: var(--fg); border-color: var(--hair-strong); }
+.chip.on { color: #2a1c07; font-weight: 600; background: linear-gradient(135deg, var(--gold-1), var(--gold-3)); border-color: transparent; }
+
+/* 商品网格 */
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); margin-top: 6px; }
+.pcard { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--hair); background: linear-gradient(160deg, rgba(255, 244, 216, 0.07), rgba(255, 244, 216, 0.025)); backdrop-filter: blur(18px) saturate(150%); transition: transform 0.24s var(--ease), box-shadow 0.3s var(--ease), border-color 0.24s var(--ease); display: flex; flex-direction: column; }
+.pcard:hover { transform: translateY(-3px); border-color: var(--hair-strong); box-shadow: 0 22px 44px -20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.24); }
+.pcard .thumb { aspect-ratio: 4 / 3; display: grid; place-items: center; font-size: 34px; font-weight: 700; color: rgba(42, 28, 7, 0.72); letter-spacing: 0.02em; background: linear-gradient(135deg, #2a2116, #4a3a21 40%, #6d5326); position: relative; }
+.pcard .thumb span { position: relative; z-index: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+.pcard .thumb::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 40%, rgba(255, 244, 216, 0.14) 50%, transparent 60%); }
+.pcard .info { padding: 13px 14px 15px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.pcard h3 { font-size: 14.5px; font-weight: 600; line-height: 1.4; margin: 0; }
+.pcard .meta { color: var(--dim); font-size: 12px; display: flex; gap: 8px; }
+.pcard .price { color: var(--gold-2); font-size: 17px; font-weight: 680; font-variant-numeric: tabular-nums; }
+.pcard .price small { font-size: 12px; color: var(--sub); font-weight: 400; margin-left: 6px; }
+.pcard .acts { margin-top: auto; display: flex; gap: 8px; }
+
+/* 详情 / 结算 / 订单：玻璃容器 */
+.panel { border-radius: 20px; border: 1px solid var(--hair); background: linear-gradient(158deg, rgba(255, 244, 216, 0.08), rgba(255, 244, 216, 0.03) 60%, rgba(176, 122, 44, 0.05)); backdrop-filter: blur(24px) saturate(170%); box-shadow: 0 16px 44px -18px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.2); padding: 22px; }
+.detail { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+.detail .big { aspect-ratio: 1 / 1; border-radius: 18px; display: grid; place-items: center; font-size: 78px; color: rgba(42, 28, 7, 0.7); background: linear-gradient(135deg, #2a2116, #54401f 45%, #7a5c28); }
+.detail h1 { font-size: 23px; margin: 0 0 8px; line-height: 1.35; }
+.detail .price-lg { font-size: 30px; font-weight: 700; color: var(--gold-2); font-variant-numeric: tabular-nums; }
+.detail dl { display: grid; grid-template-columns: 84px 1fr; gap: 7px 12px; color: var(--sub); font-size: 13.5px; margin: 16px 0; }
+.detail dt { color: var(--dim); }
+.qty { display: inline-flex; align-items: center; border: 1px solid var(--hair); border-radius: 11px; overflow: hidden; }
+.qty button { border: none; border-radius: 0; background: transparent; padding: 7px 12px; font-size: 15px; }
+.qty input { width: 52px; text-align: center; border: none; background: transparent; box-shadow: none; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.stack { display: grid; gap: 12px; }
+.muted { color: var(--sub); font-size: 13px; }
+.hr { height: 1px; background: rgba(255, 244, 216, 0.1); margin: 16px 0; border: 0; }
+
+/* 购物车行 */
+.citem { display: grid; grid-template-columns: 56px 1fr auto; gap: 13px; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255, 244, 216, 0.08); }
+.citem .mini { width: 56px; height: 56px; border-radius: 13px; display: grid; place-items: center; font-weight: 700; color: rgba(42, 28, 7, 0.7); background: linear-gradient(135deg, #2a2116, #6d5326); }
+.citem .nm { font-size: 14px; font-weight: 550; }
+.citem .sub { color: var(--gold-2); font-variant-numeric: tabular-nums; }
+
+/* 抽屉 */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 92vw); z-index: 60; display: flex; flex-direction: column; background: linear-gradient(158deg, rgba(24, 20, 14, 0.86), rgba(12, 10, 7, 0.9)); backdrop-filter: blur(30px) saturate(180%); border-left: 1px solid var(--hair); box-shadow: -30px 0 70px -30px rgba(0, 0, 0, 0.95); animation: slideInRight 0.32s var(--ease); }
+@keyframes slideInRight { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer-head, .drawer-foot { padding: 16px 18px; display: flex; align-items: center; gap: 10px; }
+.drawer-head { border-bottom: 1px solid rgba(255, 244, 216, 0.09); justify-content: space-between; }
+.drawer-foot { border-top: 1px solid rgba(255, 244, 216, 0.09); flex-direction: column; align-items: stretch; gap: 12px; }
+.drawer-body { flex: 1; overflow: auto; padding: 8px 18px; }
+.scrim { position: fixed; inset: 0; z-index: 55; background: rgba(4, 3, 2, 0.55); backdrop-filter: blur(6px); animation: fadeIn 0.24s var(--ease); }
+
+/* 空状态与提示 */
+.empty-state { text-align: center; padding: 56px 20px; color: var(--sub); }
+.empty-state b { display: block; color: var(--fg); font-size: 16px; margin-bottom: 8px; }
+.toast { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 80; padding: 11px 20px; border-radius: 999px; font-size: 13.5px; color: var(--fg); background: linear-gradient(150deg, rgba(255, 244, 216, 0.18), rgba(255, 244, 216, 0.07)); border: 1px solid var(--hair-strong); backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.9); animation: toastIn 0.3s var(--spring); }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+.shop-foot { max-width: 1180px; margin: 0 auto; padding: 26px 20px 60px; color: var(--dim); font-size: 12.5px; line-height: 1.9; border-top: 1px solid rgba(255, 244, 216, 0.08); }
+.skel { text-align: center; color: var(--dim); padding: 60px; }
+.steps { display: flex; gap: 8px; flex-wrap: wrap; color: var(--sub); font-size: 13px; margin-bottom: 18px; }
+.steps b { color: var(--fg); }
+@media (max-width: 860px) {
+  .detail { grid-template-columns: 1fr; }
+  .shop-main { padding: 18px 14px 80px; }
+  .shop-head { top: 6px; padding: 10px 14px; gap: 10px; }
+  .shop-nav { width: 100%; justify-content: space-between; }
+  .shop-nav .navbtn { padding: 8px 9px; font-size: 12.5px; }
+}

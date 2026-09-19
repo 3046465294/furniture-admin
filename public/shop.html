@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURUM 家居商城</title>
+<meta name="description" content="AURUM 家居商城 —— 沙发、床类、餐桌椅、衣柜、储物收纳与户外家具。">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/shop.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f7cd7c'/><text x='16' y='23' font-size='19' text-anchor='middle' font-family='system-ui' fill='%232a1c07'>A</text></svg>">
+</head>
+<body class="shop">
+
+<!-- 顶栏：品牌 + 搜索 + 导航（导航为悬浮玻璃条，选中项有液态指示器） -->
+<header class="shop-head">
+  <a class="shop-brand" href="#/">
+    <span class="logo logo-sm" aria-hidden="true"><svg viewBox="0 0 32 32"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6e0"/><stop offset=".5" stop-color="#f7cd7c"/><stop offset="1" stop-color="#c8892f"/></linearGradient></defs><path d="M16 4.6 26.6 27.4h-5.2l-1.9-4.5h-7l-1.9 4.5H5.4Z" fill="url(#lgS)"/><path d="M16 13.6l2.5 5.4h-5Z" fill="#2a1c07" opacity=".42"/></svg></span>
+    <span class="shop-name">AURUM<em>家居商城</em></span>
+  </a>
+  <form class="shop-search" id="searchForm" role="search">
+    <input id="q" placeholder="搜索商品名称或 SKU" autocomplete="off" aria-label="搜索商品">
+    <button type="submit" class="btn-primary">搜索</button>
+  </form>
+  <nav class="shop-nav" id="topNav">
+    <a class="navbtn" href="#/">首页</a>
+    <a class="navbtn" href="#/list">全部商品</a>
+    <a class="navbtn" href="#/cart">购物车 <span class="badge-n" id="cartN" hidden>0</span></a>
+    <a class="navbtn" href="#/orders">我的订单</a>
+    <a class="navbtn" href="#/account" id="navAccount">登录</a>
+  </nav>
+</header>
+
+<main id="main" class="shop-main" aria-live="polite"><div class="skel">正在加载…</div></main>
+
+<footer class="shop-foot">
+  <div>AURUM 家居商城 · 作品演示系统（订单/支付为演示数据，请勿填写真实个人信息）</div>
+  <div class="dim">服务端：Node 24 + 内置 SQLite，零第三方依赖 · 前后台分离部署 · 指标端点 /api/shop/metrics.prom</div>
+</footer>
+
+<!-- 购物车抽屉 -->
+<aside class="drawer" id="drawer" hidden aria-label="购物车">
+  <div class="drawer-head"><b>购物车</b><button class="btn-ghost" id="drawerClose">关闭</button></div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot">
+    <div class="row-between"><span>合计</span><b id="drawerTotal">¥0.00</b></div>
+    <button class="btn-primary btn-block" id="toCheckout">去结算</button>
+  </div>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<script src="/shop.js" type="module"></script>
+</body>
+</html>
