@@ -1,0 +1,153 @@
+/**
+ * 安全审计套件（自动化，零依赖）
+ *
+ * 用法：node scripts/security-audit.mjs
+ *   · 对本地服务跑一遍越权 / 注入 / CSRF / 限流 / 路径穿越 / 头部与 Cookie 策略检查
+ *   · 输出 PASS/FAIL 清单与风险等级，任一 HIGH 未通过则退出码非 0（可直接接 CI 门禁）
+ *
+ * 这比"看一眼代码觉得安全"可靠：每次改动后 30 秒能重跑一遍。
+ */
+const A = 'http://127.0.0.1:8090';   // 后台管理
+const S = 'http://127.0.0.1:8091';   // 商城前台
+const G = 'http://127.0.0.1:8085';   // 网关
+const ADMIN_PWD = process.env.FA_ADMIN_PWD ?? ''
+const VIEWER = { u: 'demo', p: 'shijia.cyou' }
+
+let pass = 0, fail = 0, high = 0
+const findings = []
+const check = (level, name, ok, detail = '') => {
+  if (ok) pass++; else { fail++; if (level === 'HIGH') high++ }
+  findings.push({ level, name, ok, detail })
+  console.log(`  ${ok ? '✅' : '❌'} [${level}] ${name}${detail ? '   ' + detail : ''}`)
+}
+
+async function req(base, path, opts = {}) {
+  const headers = { ...(opts.headers ?? {}) }
+  if (opts.cookie) headers.cookie = opts.cookie
+  if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; headers['X-Requested-With'] = 'fetch' }
+  const res = await fetch(base + path, {
+    method: opts.method ?? 'GET', headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json),
+    redirect: 'manual',
+  })
+  const setCookie = res.headers.getSetCookie?.() ?? []
+  const text = await res.text()
+  let data = {}; try { data = JSON.parse(text) } catch { data = { raw: text.slice(0, 200) } }
+  return { status: res.status, headers: res.headers, data, text, cookie: setCookie.map((c) => c.split(';')[0]).join('; '), setCookie }
+}
+const login = async (base, username, password) => {
+  const r = await req(base, base === S || base === G ? '/api/shop/login' : '/api/auth/login', { method: 'POST', json: { username, password } })
+  return r.status === 200 ? r.cookie : null
+}
+
+console.log('════════ AURUM 安全审计 ════════')
+console.log('\n【1】未认证访问（应全部 401）')
+for (const [base, path, label] of [
+  [A, '/api/products', '后台-商品列表'],
+  [A, '/api/users', '后台-用户列表'],
+  [A, '/api/system/audit', '后台-审计日志'],
+  [A, '/api/system/login-attempts', '后台-登录尝试'],
+  [S, '/api/shop/cart', '前台-购物车'],
+  [S, '/api/shop/orders', '前台-我的订单'],
+  [S, '/api/shop/addresses', '前台-收货地址'],
+]) {
+  const r = await req(base, path)
+  check('HIGH', `未登录访问 ${label}`, r.status === 401, `HTTP ${r.status}`)
+}
+
+console.log('\n【2】CSRF 防护（变更类请求缺少 X-Requested-With 应 400）')
+for (const [base, path, body, label] of [
+  [A, '/api/products', { sku: 'X', name: 'x', price: 1 }, '后台-新建商品'],
+  [S, '/api/shop/register', { username: 'csrf_probe', password: 'Abcd1234' }, '前台-注册'],
+  [S, '/api/shop/login', { username: 'demo', password: 'x' }, '前台-登录'],
+]) {
+  const r = await req(base, path, { method: 'POST', json: body, headers: { 'X-Requested-With': '' } })
+  check('HIGH', `CSRF 拦截 ${label}`, r.status === 400, `HTTP ${r.status}`)
+}
+
+console.log('\n【3】越权（只读账号不得写/管用户）')
+const viewerCookie = await login(S, VIEWER.u, VIEWER.p)
+if (viewerCookie) {
+  const r1 = await req(S, '/api/shop/cart', { method: 'POST', json: { productId: 1, qty: 1 }, cookie: viewerCookie })
+  check('MED', 'viewer 加购（前台业务允许）', r1.status === 200 || r1.status === 409, `HTTP ${r1.status}`)
+  const adminCookie = ADMIN_PWD ? await login(A, 'admin', ADMIN_PWD) : null
+  if (adminCookie) {
+    const r2 = await req(A, '/api/users', { method: 'POST', json: { username: 'rbac_probe', password: 'Abcd1234', role: 'admin' }, cookie: viewerCookie })
+    check('HIGH', 'viewer 尝试建管理员账号', r2.status === 401 || r2.status === 403, `HTTP ${r2.status}`)
+  } else console.log('  ⏭  跳过 RBAC 写检查（未提供 FA_ADMIN_PWD）')
+}
+
+console.log('\n【4】路径穿越与敏感文件暴露（应 404）')
+for (const [base, path, label] of [
+  [A, '/../src/auth.js', '后台-源码'],
+  [A, '/..%2f..%2fdata%2ffurniture.db', '后台-数据库文件'],
+  [A, '/.git/config', '后台-git 配置'],
+  [S, '/../../package.json', '前台-源码'],
+  [S, '/../data/furniture.db', '前台-数据库文件'],
+]) {
+  const r = await req(base, path)
+  check('HIGH', `拦截 ${label}`, r.status === 404 || r.status === 400, `HTTP ${r.status}`)
+}
+
+console.log('\n【5】注入与异常输入（不得 5xx）')
+for (const [base, path, label] of [
+  [S, "/api/shop/products?q=' or 1=1--", '前台-搜索 SQL 注入尝试'],
+  [S, "/api/shop/products?category=1;drop table users--", '前台-分类参数注入尝试'],
+  [A, '/api/products?q=%00%ff%fe', '后台-二进制脏参数'],
+  [S, '/api/shop/products/' + encodeURIComponent('1 union select 1'), '前台-详情非法 id'],
+]) {
+  const r = await req(base, path)
+  check('HIGH', `不崩 ${label}`, r.status < 500, `HTTP ${r.status}`)
+}
+
+console.log('\n【6】请求体与参数边界')
+{
+  const big = 'x'.repeat(300 * 1024)
+  const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'a', password: big } })
+  check('MED', '超大请求体被拒（413/400/401）', [413, 400, 401].includes(r.status), `HTTP ${r.status}`)
+  const r2 = await req(S, '/api/shop/register', { method: 'POST', json: { username: 'a'.repeat(500), password: 'x'.repeat(500) } })
+  check('HIGH', '超长字段被校验拒绝', r2.status === 400, `HTTP ${r2.status}`)
+}
+
+console.log('\n【7】安全响应头与 Cookie 策略')
+{
+  const r = await req(A, '/api/system/health')
+  const h = r.headers
+  check('HIGH', 'CSP 存在且禁止内联脚本', !!h.get('content-security-policy') && !/script-src[^;]*unsafe-inline/.test(h.get('content-security-policy') ?? ''), (h.get('content-security-policy') ?? '(无)').slice(0, 60) + '…')
+  check('HIGH', 'X-Frame-Options: DENY（防点击劫持）', (h.get('x-frame-options') ?? '') === 'DENY')
+  check('MED', 'X-Content-Type-Options: nosniff', (h.get('x-content-type-options') ?? '') === 'nosniff')
+  check('MED', 'Referrer-Policy 已设置', !!h.get('referrer-policy'), h.get('referrer-policy') ?? '')
+}
+if (VIEWER.p) {
+  const r = await req(S, '/api/shop/login', { method: 'POST', json: { username: VIEWER.u, password: VIEWER.p } })
+  const c = r.setCookie.join(';')
+  check('HIGH', '会话 Cookie 为 HttpOnly', /HttpOnly/i.test(c))
+  check('HIGH', '会话 Cookie 为 SameSite=Strict/Lax', /SameSite=(Strict|Lax)/i.test(c))
+  check('MED', '本地 HTTP 下不带 Secure（HTTPS 下才带）', !/Secure/i.test(c), '经隧道访问时应带 Secure')
+}
+
+console.log('\n【8】登录限流与锁定')
+{
+  let last = 0
+  for (let i = 0; i < 8; i++) {
+    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'admin', password: 'wrong-' + i } })
+    last = r.status
+    if (r.status === 429) break
+  }
+  check('HIGH', '连续错误口令触发限流（429）', last === 429, `最后一次 HTTP ${last}`)
+}
+
+console.log('\n【9】网关运维接口保护')
+{
+  const r = await req(G, '/_gw/weight?group=shop&id=shop-green&weight=99', { method: 'PUT' })
+  check('HIGH', '无令牌改灰度权重被拒', r.status === 401, `HTTP ${r.status}`)
+  const r2 = await req(G, '/_gw/metrics.prom')
+  check('LOW', '网关指标端点同样需要令牌', r2.status === 401, `HTTP ${r2.status}`)
+}
+
+console.log('\n════════ 审计结果 ════════')
+console.log(`  通过 ${pass} 项 · 失败 ${fail} 项（其中 HIGH ${high} 项）`)
+if (high > 0) {
+  console.log('  ❌ 存在高风险未通过项，禁止发布：')
+  findings.filter((f) => !f.ok && f.level === 'HIGH').forEach((f) => console.log('     · ' + f.name + '  ' + f.detail))
+}
+process.exit(high > 0 ? 1 : 0)

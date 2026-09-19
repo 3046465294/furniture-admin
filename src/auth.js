@@ -11,9 +11,36 @@
  *   · Cookie 为 HttpOnly + SameSite=Strict；确认是 HTTPS 访问时再加 Secure
  */
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { db, now } from './db.js';
 
-const SECRET = process.env.APP_SECRET ?? 'dev-secret-change-me';
+/**
+ * 会话签名密钥：优先级 环境变量 APP_SECRET > 文件 data/secret.key（首次自动生成 32 字节强随机）
+ * 安全审计发现：原来是硬编码的默认回退值 dev-secret-change-me —— 任何人都能伪造会话，
+ * 属于真实隐患（不是理论风险）。改为文件密钥 + 提供轮换脚本后，密钥不再进代码库。
+ */
+function loadSecret() {
+  if (process.env.APP_SECRET) return process.env.APP_SECRET;
+  const dir = fileURLToPath(new URL('../data/', import.meta.url));
+  const file = dir + 'secret.key';
+  try {
+    if (existsSync(file)) {
+      const v = readFileSync(file, 'utf8').trim();
+      if (v.length >= 32) return v;
+    }
+    mkdirSync(dir, { recursive: true });
+    const fresh = randomBytes(32).toString('hex');
+    writeFileSync(file, fresh, { mode: 0o600 });
+', { mode: 0o600 });
+    console.log('[auth] 已生成新的会话签名密钥 data/secret.key（请勿提交到版本库）');
+    return fresh;
+  } catch (e) {
+    console.warn('[auth] 无法读写密钥文件，回退到进程内随机密钥（重启后旧会话失效）:', e.message);
+    return randomBytes(32).toString('hex');
+  }
+}
+const SECRET = loadSecret();
 export const SESSION_COOKIE = 'fa_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;   // 12 小时
 const MAX_FAILED = 5;                          // 连续失败 5 次
