@@ -1,4 +1,5 @@
 /**
+  try { db.exec('PRAGMA foreign_keys = ON'); } catch {}
  * 演示数据定义 + 一键重置（供 CLI 与服务的定时重置共用）
  *
  * 为什么单独抽出来：登录页上写着「数据每 10 分钟重置为种子数据」，
@@ -81,6 +82,7 @@ export function resetDemoData(db, { force = false } = {}) {
 //   shipments / refunds / order_items / payments  → orders
 //   product_skus / product_images / stock_movements / reviews / cart_items → products
 //   cart_items → carts
+  try { db.exec('PRAGMA foreign_keys = OFF'); } catch {}
 db.exec(`
   delete from shipments;
   delete from refunds;
