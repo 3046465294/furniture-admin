@@ -153,3 +153,6 @@ button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed;
 .addr-line { font-size: 13.5px; }
 .btn-block { width: 100%; }
 .btn-sm { padding: 6px 12px; font-size: 12.5px; }
+
+/* 免运费时的强调色 */
+.gold { color: var(--gold-2); font-weight: 600; }

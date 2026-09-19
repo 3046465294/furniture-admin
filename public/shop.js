@@ -387,9 +387,9 @@ async function viewCheckout() {
           <div><div class="nm">${esc(i.name)}</div><div class="dim">${esc(i.spec || '默认')} · ${money(i.price)} × ${i.qty}</div></div>
           <div class="sub">${money(i.subtotal)}</div></div>`).join('')}
         <hr class="hr">
-        <div class="row-between"><span class="muted">商品合计</span><b>${money(cart.total)}</b></div>
-        <div class="row-between" style="margin-top:8px"><span class="muted">运费</span><span class="muted">免运费（演示环境）</span></div>
-        <div class="row-between" style="margin:14px 0 16px"><span>应付金额</span><b style="color:var(--gold-2);font-size:22px">${money(cart.total)}</b></div>
+        <div class="row-between"><span class="muted">商品合计</span><b id="goodsAmt">${money(cart.total)}</b></div>
+        <div class="row-between" style="margin-top:8px"><span class="muted">运费</span><span id="shipAmt" class="muted">计算中…</span></div>
+        <div class="row-between" style="margin:14px 0 16px"><span>应付金额</span><b id="payAmt" style="color:var(--gold-2);font-size:22px">${money(cart.total)}</b></div>
         <button class="btn-primary btn-block" id="submitOrder">提交订单</button>
         <p class="muted" style="margin:12px 0 0">提交后生成「待付款」订单，可在「我的订单」完成模拟支付。演示环境不接入真实支付渠道。</p>
       </div>
@@ -399,7 +399,29 @@ async function viewCheckout() {
   const addrList = $('addrList');
   addrList.addEventListener('change', () => {
     addrList.querySelectorAll('.addr').forEach((el) => el.classList.toggle('on', String(sel()) === el.dataset.addr));
+    refreshShipping();
   });
+  // 运费实时报价：服务端算钱，前端只展示；接口不可用时优雅回退（不报错、不白屏）
+  const refreshShipping = async () => {
+    const el = $('shipAmt'), pay = $('payAmt'), goods = $('goodsAmt');
+    if (!el) return;
+    const addressId = sel();
+    if (!addressId) { el.textContent = '选择地址后计算'; return; }
+    try {
+      const q = await api('/api/shop/shipping/quote', { method: 'POST', body: { addressId } });
+      goods.textContent = money(q.goods);
+      const fee = Number(q.shipping) || 0;
+      el.textContent = (fee > 0 ? money(fee) : '免运费') + (q.template ? ' · ' + q.template : '') + (q.freeApplied ? '（已满额包邮）' : '');
+      el.className = fee > 0 ? '' : 'gold';
+      pay.textContent = money(q.payable);
+    } catch (e) {
+      // 后端还没上线运费接口时走这里（当前线上实例即为旧代码）
+      el.textContent = '免运费（演示环境）';
+      el.className = 'muted';
+    }
+  };
+  await refreshShipping();
+
   $('toggleAddr').addEventListener('click', () => { const f = $('addrForm'); f.hidden = !f.hidden; });
   $('cancelAddr').addEventListener('click', () => { $('addrForm').hidden = true; });
   $('saveAddr').addEventListener('click', async () => {
