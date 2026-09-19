@@ -36,26 +36,49 @@ function renderCartBadge() {
 
 // ────────── 视图 ──────────
 async function viewHome() {
-  const [cats, hot] = await Promise.all([api('/api/shop/categories'), api('/api/shop/products?size=8&sort=hot')]);
+  const [cats, hot, fresh, stats] = await Promise.all([
+    api('/api/shop/categories'),
+    api('/api/shop/products?size=8&sort=hot'),
+    api('/api/shop/products?size=4&sort=new'),
+    api('/api/shop/health'),
+  ]);
   state.cats = cats.rows;
-  const stats = await api('/api/shop/health');
+  const promises = [
+    { t: '真实库存', d: '每笔加购都校验当前规格库存，售罄自动禁止下单' },
+    { t: '按规格计价', d: '同一商品不同颜色尺寸独立价格与库存，下单锁定对应规格' },
+    { t: '订单可追溯', d: '每次库存变动与订单状态流转都留痕，后台可查审计' },
+  ];
   main.innerHTML = `
     <section class="hero">
+      <div class="hero-badge">AURUM · 家居商城</div>
       <h1>把一件家具，安放进你的生活</h1>
-      <p>沙发 · 床类 · 餐桌椅 · 衣柜 · 储物收纳 · 户外家具。真实库存、真实下单流程：加购 → 结算 → 生成订单 → 支付。</p>
+      <p>沙发 · 床类 · 餐桌椅 · 衣柜 · 储物收纳 · 户外家具。从浏览到签收的完整链路：选规格 → 加购 → 结算 → 生成订单 → 支付 → 发货 → 完成。</p>
+      <div class="row" style="gap:10px;margin:18px 0 8px">
+        <a class="btn primary" href="#/list">开始选购</a>
+        <a class="btn ghost" href="#/orders">我的订单</a>
+      </div>
       <div class="hero-stats">
-        <span><b>${stats.products}</b>件在售商品</span>
-        <span><b>${state.cats.length}</b>个分类</span>
+        <span><b>${stats.products}</b>件在售</span>
+        <span><b>${cats.rows.length}</b>个分类</span>
         <span><b>${stats.orders}</b>笔订单</span>
-        <span><b>零依赖</b>服务端</span>
+        <span><b>0</b>第三方依赖</span>
       </div>
     </section>
+    <div class="promise">
+      ${promises.map((p) => `<div class="promise-item"><b>${esc(p.t)}</b><span>${esc(p.d)}</span></div>`).join('')}
+    </div>
     <div class="chips">
       <a class="chip on" href="#/list">全部商品</a>
-      ${state.cats.map((c) => `<a class="chip" href="#/list?category=${c.id}">${esc(c.name)} <span class="dim">${c.count}</span></a>`).join('')}
+      ${cats.rows.map((c) => `<a class="chip" href="#/list?category=${c.id}">${esc(c.name)} <span class="dim">${c.count}</span></a>`).join('')}
     </div>
-    <h2 style="margin:22px 0 4px;font-size:19px">热销推荐</h2>
-    <p class="muted" style="margin:0 0 14px">按累计销量排序 —— 数据来自订单明细的真实汇总。</p>
+    <div class="floor-head"><h2>分类直达</h2><span class="muted">按分类浏览，数量为当前在售件数</span></div>
+    <div class="tiles">
+      ${cats.rows.map((c) => `<a class="tile" href="#/list?category=${c.id}"><span class="tile-name">${esc(c.name)}</span><span class="tile-n">${c.count} 件在售</span></a>`).join('')}
+    </div>
+    <div class="floor-head"><h2>新品上架</h2><a class="muted" href="#/list?sort=new">查看全部 →</a></div>
+    <div class="grid">${fresh.rows.map(card).join('')}</div>
+    <div class="floor-head"><h2>热销推荐</h2><a class="muted" href="#/list?sort=hot">查看全部 →</a></div>
+    <p class="muted" style="margin:-6px 0 14px">按累计销量排序 —— 数据来自订单明细的真实汇总。</p>
     <div class="grid">${hot.rows.map(card).join('')}</div>`;
 }
 
@@ -463,10 +486,26 @@ function markNav(hash) {
   const key = hash.split('?')[0];
   document.querySelectorAll('#topNav .navbtn').forEach((a, i) => a.classList.toggle('on', map[key] === i));
 }
+/** 骨架屏：每次视图切换先占位，数据回来再替换（比"正在加载…"体面，也避免布局跳动） */
+function skeleton(kind) {
+  if (kind === 'detail') {
+    main.innerHTML = `<div class="detail">
+      <div class="skel skel-big"></div>
+      <div><div class="skel skel-title"></div><div class="skel skel-line"></div><div class="skel skel-line" style="width:60%"></div><div class="skel skel-block"></div></div>
+    </div>`;
+    return;
+  }
+  main.innerHTML = `<div class="skel-wrap">
+    <div class="skel skel-title"></div><div class="skel skel-line"></div>
+    <div class="skel-grid">${Array.from({ length: 6 }, () => '<div class="skel skel-card"></div>').join('')}</div>
+  </div>`;
+}
+
 async function route() {
   const hash = location.hash || '#/';
   const [path, query] = hash.slice(1).split('?');
   markNav(hash);
+  skeleton(path.startsWith('/p/') ? 'detail' : 'list');
   try {
     if (path.startsWith('/p/')) await viewProduct(path.slice(3));
     else if (path === '/list') await viewList(query ?? '');

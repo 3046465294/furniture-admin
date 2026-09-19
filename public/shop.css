@@ -120,3 +120,28 @@ button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed;
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb:hover { transform: translateY(-2px); }
 .thumb.on { border-color: var(--gold-2); box-shadow: 0 0 0 3px rgba(247, 205, 124, .18); }
+/* ── 首页楼层 ── */
+.hero-badge { display: inline-block; font-size: 12px; letter-spacing: .12em; color: var(--gold-2); border: 1px solid rgba(247,205,124,.35); border-radius: 999px; padding: 4px 12px; margin-bottom: 14px; }
+.promise { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 22px 0 6px; }
+.promise-item { border: 1px solid var(--hair); border-radius: 16px; padding: 14px 16px; background: linear-gradient(160deg, rgba(255,244,216,.06), rgba(255,244,216,.02)); backdrop-filter: blur(16px) saturate(150%); }
+.promise-item b { display: block; font-size: 14px; margin-bottom: 5px; color: var(--gold-2); }
+.promise-item span { font-size: 12.5px; color: var(--sub); line-height: 1.6; }
+.floor-head { display: flex; align-items: baseline; justify-content: space-between; margin: 30px 0 12px; }
+.floor-head h2 { margin: 0; font-size: 20px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.tile { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 16px; border: 1px solid var(--hair); background: linear-gradient(150deg, rgba(255,244,216,.09), rgba(255,244,216,.03)); color: var(--fg); text-decoration: none; transition: transform .2s var(--ease), border-color .2s var(--ease), box-shadow .25s var(--ease); }
+.tile:hover { transform: translateY(-3px); border-color: var(--hair-strong); box-shadow: 0 18px 38px -18px rgba(0,0,0,.9); }
+.tile-name { font-size: 15px; font-weight: 600; }
+.tile-n { font-size: 12px; color: var(--sub); }
+
+/* ── 骨架屏 ── */
+.skel-wrap { padding: 10px 0; }
+.skel { border-radius: 12px; background: linear-gradient(100deg, rgba(255,244,216,.05) 30%, rgba(255,244,216,.12) 50%, rgba(255,244,216,.05) 70%); background-size: 220% 100%; animation: skelShimmer 1.6s ease-in-out infinite; }
+@keyframes skelShimmer { 0% { background-position: 130% 0; } 100% { background-position: -30% 0; } }
+.skel-title { height: 30px; width: 260px; margin-bottom: 14px; }
+.skel-line { height: 14px; width: 100%; margin-bottom: 10px; }
+.skel-block { height: 120px; width: 100%; margin-top: 16px; }
+.skel-big { aspect-ratio: 1 / 1; border-radius: 18px; }
+.skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 16px; margin-top: 10px; }
+.skel-card { aspect-ratio: 4 / 3.6; border-radius: 18px; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
