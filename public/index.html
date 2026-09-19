@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AURUM · 家居运营中台</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="/style.css?v=2.2.2">
+<link rel="stylesheet" href="/style.css?v=2.3.3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛋️</text></svg>">
 </head>
 <body>
@@ -14,7 +14,7 @@
 <section id="login" class="login-wrap" hidden>
   <form class="login-card" id="loginForm" autocomplete="on">
     <div class="brand">
-      <div class="logo">🛋️</div>
+      <div class="logo"><svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6e0"/><stop offset=".5" stop-color="#f7cd7c"/><stop offset="1" stop-color="#c8892f"/></linearGradient></defs><path d="M16 4.6 26.6 27.4h-5.2l-1.9-4.5h-7l-1.9 4.5H5.4Z" fill="url(#lg1)"/><path d="M16 13.6l2.5 5.4h-5Z" fill="#2a1c07" opacity=".42"/></svg></div>
       <div>
         <h1>AURUM</h1>
         <p>家居运营中台 · Live Ops</p>
@@ -35,20 +35,22 @@
 <!-- ───── 应用 ───── -->
 <section id="app" hidden>
   <header class="topbar">
-    <div class="brand-mini"><span class="logo">🛋️</span><b>AURUM</b><span class="tag">家居运营中台</span></div>
-    <nav>
-      <button class="navbtn on" data-view="dashboard">总览</button>
-      <button class="navbtn" data-view="products">家具商品</button>
-      <button class="navbtn" data-view="categories">分类</button>
-      <button class="navbtn" data-view="orders">订单</button>
-      <button class="navbtn" data-view="system">系统</button>
-    </nav>
+    <div class="brand-mini"><span class="logo"><svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6e0"/><stop offset=".5" stop-color="#f7cd7c"/><stop offset="1" stop-color="#c8892f"/></linearGradient></defs><path d="M16 4.6 26.6 27.4h-5.2l-1.9-4.5h-7l-1.9 4.5H5.4Z" fill="url(#lg2)"/><path d="M16 13.6l2.5 5.4h-5Z" fill="#2a1c07" opacity=".42"/></svg></span><b>AURUM</b><span class="tag">家居运营中台</span></div>
+    <!-- 导航已移到 <header> 之外：backdrop-filter 会给 position:fixed 的子元素创建包含块，留在顶栏里就落不到视口底部 -->
     <div class="right">
       <span class="live" id="liveDot" title="实时监控连接状态"><i></i><span id="liveText">连接中…</span></span>
       <span class="who" id="whoami"></span>
       <button class="ghost" id="logoutBtn">退出</button>
     </div>
   </header>
+
+  <nav>
+      <button class="navbtn on" data-view="dashboard">总览</button>
+      <button class="navbtn" data-view="products">家具商品</button>
+      <button class="navbtn" data-view="categories">分类</button>
+      <button class="navbtn" data-view="orders">订单</button>
+      <button class="navbtn" data-view="system">系统</button>
+    </nav>
 
   <!-- 总览 -->
   <main id="view-dashboard" class="view">
@@ -185,6 +187,6 @@
   </div>
 </div>
 
-<script src="/app.js?v=2.2.2" type="module"></script>
+<script src="/app.js?v=2.3.3" type="module"></script>
 </body>
 </html>

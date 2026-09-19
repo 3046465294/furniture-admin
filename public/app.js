@@ -297,7 +297,7 @@ const fmtUptime = (s) => s < 60 ? s + ' 秒' : s < 3600 ? Math.floor(s / 60) + '
 
 // ══════════ 二期/三期界面：用户与权限 · 会话 · 告警规则 · 导出（动态注入，避免改动 index.html）══════════
 (function adminPanel() {
-  const nav = document.querySelector('.topbar nav');
+  const nav = document.querySelector('nav');
   const app = document.getElementById('app');
   if (!nav || !app) return;
   // 按角色降级：只读/运营账号不该看到自己点进去只会 403 的入口
@@ -491,4 +491,50 @@ async function boot() {
     const me = await api('/api/auth/me');
     if (me.user) { state.user = me.user; await boot(); } else showLogin();
   } catch { showLogin(); }
+})();
+
+
+// ══════════ 底部导航的液态滑动指示器（酷安式）══════════
+// 自包含：用 MutationObserver 监听 .on 类的变化，不侵入原有的视图切换逻辑。
+// 指示器滑动时用弹簧曲线并轻微纵向压缩，后面跟一个模糊的拖尾 —— 这是"液态"的关键。
+(function liquidNav() {
+  const nav = document.querySelector('nav');
+  if (!nav) return;
+  const ghost = document.createElement('span');
+  ghost.className = 'nav-liquid ghost';
+  const liquid = document.createElement('span');
+  liquid.className = 'nav-liquid';
+  nav.prepend(ghost);
+  nav.prepend(liquid);
+
+  let cur = null;
+  const place = (btn, animate) => {
+    if (!btn) return;
+    const nr = nav.getBoundingClientRect();
+    const br = btn.getBoundingClientRect();
+    const left = br.left - nr.left;
+    for (const el of [liquid, ghost]) {
+      el.style.width = br.width + 'px';
+      el.style.transform = 'translateX(' + left + 'px)';
+    }
+    if (animate) {
+      liquid.classList.add('moving');
+      setTimeout(() => liquid.classList.remove('moving'), 430);
+    }
+    cur = btn;
+  };
+  // 注意：登录前 #app 是 hidden 的，此时 nav 没有布局，测量会得到 0 宽 —— 必须等它可见后再定位。
+  // 而且首个导航项的 .on 是写在 HTML 里的，不会触发 class 变化，所以要主动多次校正。
+  const sync = () => {
+    const on = nav.querySelector('.navbtn.on');
+    if (!on) return;
+    if (!nav.getBoundingClientRect().width) return;      // 还没布局，跳过
+    const changed = on !== cur;
+    place(on, changed);
+  };
+  new MutationObserver(sync).observe(nav, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  const appRoot = document.getElementById('app');
+  if (appRoot) new MutationObserver(() => setTimeout(sync, 40)).observe(appRoot, { attributes: true, attributeFilter: ['hidden'] });
+  window.addEventListener('resize', () => { cur = null; sync(); });
+  [80, 250, 700, 1600, 3200].forEach((ms) => setTimeout(sync, ms));
 })();
