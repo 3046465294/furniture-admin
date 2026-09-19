@@ -221,7 +221,7 @@ route('POST', '/api/shop/cart', async (ctx) => {
   const sku = ctx.body.skuId ? skuList.find((k) => k.id === int(ctx.body.skuId, 1, 1e15, 0)) : skuList[0];
   if (!sku) return json(ctx.res, 409, { error: "该商品暂无可售规格" });
   const cartId = cartOf(c.id);
-  const exist = db.prepare('select * from cart_items where cart_id = ? and product_id = ? and (sku_id is ? or sku_id = ?)').get(cartId, pid, sku.id, sku.id);
+  const exist = db.prepare('select * from cart_items where cart_id = ? and ifnull(sku_id, -1) = ?').get(cartId, sku.id);
   const want = (exist?.qty ?? 0) + qty;
   if (want > sku.stock) return json(ctx.res, 409, { error: `「${sku.spec}」库存不足（剩 ${sku.stock} 件）` });
   if (exist) db.prepare('update cart_items set qty = ? where id = ?').run(want, exist.id);
