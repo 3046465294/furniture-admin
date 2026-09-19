@@ -40,8 +40,8 @@ const call = async (path, { method = 'GET', body, json } = {}) => {
     const res = await fetch(BASE + path, { method, headers: hdr(json ?? !!body), body: body ? JSON.stringify(body) : undefined })
     const sc = res.headers.getSetCookie?.() ?? []
     if (sc.length) cookie = sc.map((c) => c.split(';')[0]).join('; ')
-    await res.text()
-    return { ok: res.status < 400, status: res.status, ms: nowMs() - t0 }
+    const body = await res.text()
+    return { ok: res.status < 400, status: res.status, ms: nowMs() - t0, body }
   } catch (e) {
     return { ok: false, status: 0, ms: nowMs() - t0, err: e.message }
   }
@@ -94,6 +94,12 @@ const main = async () => {
           const sid = skuMap[pid]
           if (!sid) { skipped++; continue }   // 无有货规格：跳过，不计入任何统计
           res = await call('/api/shop/cart', { method: 'POST', body: { productId: pid, skuId: sid, qty: 1 } }); byKind.addCart++
+          // 加完立刻删掉：压测不应把库存买到上限（真实用户会下单，压测不产生持久副作用）
+          try {
+            const items = JSON.parse(res.body ?? "{}").items ?? []
+            const mine = items.find((x) => Number(x.productId ?? x.pid) === Number(pid)) ?? items[0]
+            if (mine?.id) await call("/api/shop/cart/" + mine.id, { method: "DELETE" })
+          } catch {}
         }
         else { res = await call('/api/shop/cart'); byKind.cart++ }
         n++; lat.push(res.ms)
