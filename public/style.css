@@ -368,7 +368,7 @@ table.mini th, table.mini td { padding: 8px 9px; border-bottom: 1px solid rgba(2
    与商城 shop.css 采用同一套取值：主蓝 #0369a1 / 亮蓝 #0284c7
    浅蓝底 #eef2f8 / 次要文字 #5a6a7f / 边框 #e2e8f0
    ═══════════════════════════════════════════════════════════════ */
-body.admin {
+body {
   --bg: #ffffff; --bg-elev: #ffffff; --bg-inset: #f8fafc;
   --fg: #0f172a; --sub: #5a6a7f; --dim: #7c8ba1;
   --hair: #e2e8f0; --hair-strong: #cbd5e1;
@@ -377,31 +377,31 @@ body.admin {
   background: #ffffff; color: #0f172a;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-body.admin .panel, body.admin .card, body.admin .box, body.admin table {
+body .panel, body .card, body .box, body table {
   background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none;
   border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: none;
 }
-body.admin header, body.admin .topbar, body.admin nav, body.admin .side {
+body header, body .topbar, body nav, body .side {
   background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none;
   border-bottom: 1px solid #e2e8f0; box-shadow: none;
 }
-body.admin .primary, body.admin .btn-primary, body.admin button.primary, body.admin #doLogin {
+body .primary, body .btn-primary, body button.primary, body #doLogin {
   background: #0369a1; border-color: #0369a1; color: #fff;
 }
-body.admin .primary:hover, body.admin .btn-primary:hover { background: #0284c7; }
-body.admin button:not(.primary):not(.btn-primary), body.admin .ghost {
+body .primary:hover, body .btn-primary:hover { background: #0284c7; }
+body button:not(.primary):not(.btn-primary), body .ghost {
   background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1;
 }
-body.admin button:not(.primary):not(.btn-primary):hover { border-color: #0369a1; color: #0369a1; }
-body.admin input, body.admin select, body.admin textarea {
+body button:not(.primary):not(.btn-primary):hover { border-color: #0369a1; color: #0369a1; }
+body input, body select, body textarea {
   background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px;
 }
-body.admin input:focus, body.admin select:focus { outline: 2px solid #0284c7; outline-offset: 1px; border-color: #0284c7; }
-body.admin a { color: #0369a1; }
-body.admin .badge { background: #eef2f8; border-color: #cbd5e1; color: #5a6a7f; }
-body.admin .badge.ok, body.admin .badge.on { background: #eef2f8; border-color: #0369a1; color: #0369a1; }
-body.admin .dim, body.admin .muted { color: #7c8ba1; }
-body.admin th { color: #5a6a7f; border-bottom: 1px solid #e2e8f0; }
-body.admin td { border-bottom: 1px solid #f1f5f9; }
-body.admin .sku-ov { background: rgba(15, 23, 42, .35); }
-body.admin .sku-panel { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15,23,42,.12); }
+body input:focus, body select:focus { outline: 2px solid #0284c7; outline-offset: 1px; border-color: #0284c7; }
+body a { color: #0369a1; }
+body .badge { background: #eef2f8; border-color: #cbd5e1; color: #5a6a7f; }
+body .badge.ok, body .badge.on { background: #eef2f8; border-color: #0369a1; color: #0369a1; }
+body .dim, body .muted { color: #7c8ba1; }
+body th { color: #5a6a7f; border-bottom: 1px solid #e2e8f0; }
+body td { border-bottom: 1px solid #f1f5f9; }
+body .sku-ov { background: rgba(15, 23, 42, .35); }
+body .sku-panel { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(15,23,42,.12); }
