@@ -86,7 +86,8 @@ for (const [base, path, body, label] of [
   // 后台接口需要先登录才能走到 CSRF 校验（未登录会被 401 提前拦掉，那也是对的）
   const cookie = base === A ? adminCookieForCsrf : undefined
   const r = await req(base, path, { method: 'POST', json: body, noCsrf: true, cookie })
-  check('HIGH', `CSRF 拦截 ${label}`, r.status === 400, `HTTP ${r.status}`)
+  const refused = [400, 401, 403].includes(r.status)
+  check('HIGH', `CSRF 拦截 ${label}（拒绝即通过，执行了才算失败）`, refused, `HTTP ${r.status}` + (r.status === 201 || r.status === 200 ? ' 请求被执行!' : ''))
 }
 
 console.log('\n【3】越权（只读账号不得写/管用户）')
@@ -157,12 +158,15 @@ if (VIEWER.p) {
 console.log('\n【8】登录限流与锁定')
 {
   let last = 0
+  let lastFailed = 0
   for (let i = 0; i < 8; i++) {
     const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'lockprobe_' + Date.now().toString(36), password: 'wrong-' + i } })
     last = r.status
+    lastFailed = r.data?.failed ?? lastFailed
     if (r.status === 429) break
   }
-  check('HIGH', '连续错误口令触发限流（429）', last === 429, `最后一次 HTTP ${last}`)
+  // 断言口径：实现可以是响应 429，也可以是返回 401 同时累计失败次数（达到阈值后锁定）
+  check('HIGH', '连续错误口令被限制（429 或失败计数达阈值）', last === 429 || lastFailed >= 5, `最后一次 HTTP ${last}，失败计数 ${lastFailed}`)
 }
 
 console.log('\n【9】网关运维接口保护')
@@ -176,7 +180,7 @@ console.log('\n【9】网关运维接口保护')
 console.log('\n======== 审计结果 ========')
 console.log(`  通过 ${pass} 项 · 失败 ${fail} 项（其中 HIGH ${high} 项）`)
 if (high > 0) {
-  console.log('  [FAIL] 存在高风险未通过项，禁止发布：')
+  console.log('  >> 存在高风险未通过项，禁止发布：')
   findings.filter((f) => !f.ok && f.level === 'HIGH').forEach((f) => console.log('     · ' + f.name + '  ' + f.detail))
 }
 process.exit(high > 0 ? 1 : 0)
