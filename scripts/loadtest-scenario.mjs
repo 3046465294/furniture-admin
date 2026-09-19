@@ -40,8 +40,8 @@ const call = async (path, { method = 'GET', body, json } = {}) => {
     const res = await fetch(BASE + path, { method, headers: hdr(json ?? !!body), body: body ? JSON.stringify(body) : undefined })
     const sc = res.headers.getSetCookie?.() ?? []
     if (sc.length) cookie = sc.map((c) => c.split(';')[0]).join('; ')
-    const body = await res.text()
-    return { ok: res.status < 400, status: res.status, ms: nowMs() - t0, body }
+    const bodyText = await res.text()
+    return { ok: res.status < 400, status: res.status, ms: nowMs() - t0, body: bodyText }
   } catch (e) {
     return { ok: false, status: 0, ms: nowMs() - t0, err: e.message }
   }
