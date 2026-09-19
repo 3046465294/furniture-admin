@@ -69,7 +69,6 @@ try {
   const d = new DatabaseSync('C:/Users/winner/Desktop/furniture-admin/data/furniture.db')
   d.prepare("insert into users(username,display_name,password_hash,role,active,created_at) values (?,?,?,'customer',1,datetime('now')) on conflict(username) do update set password_hash=excluded.password_hash, active=1")
     .run(PROBE.u, '审计探针账号', hashPassword(PROBE.p))
-  d.close()
   console.log('  [setup] 限流探针账号就绪：' + PROBE.u)
   // 越权检查用的顾客探针账号（每轮唯一）：商城登录仅允许 customer/admin，故用 customer 角色
   const VIEWPROBE = { u: 'audit_cust_' + Date.now().toString(36), p: 'Cust@' + Date.now().toString(36) }
@@ -77,6 +76,7 @@ try {
   d.prepare("insert into users(username,display_name,password_hash,role,active,created_at) values (?,?,?,'customer',1,datetime('now')) on conflict(username) do update set password_hash=excluded.password_hash, active=1")
     .run(VIEWPROBE.u, '审计顾客探针', hashPassword(VIEWPROBE.p))
   console.log('  [setup] 越权探针账号就绪：' + VIEWPROBE.u)
+  d.close()
 } catch (e) { console.log('  [setup] 探针账号创建失败（将导致限流检查失败）: ' + e.message) }
 
 console.log('======== AURUM 安全审计 ========')
