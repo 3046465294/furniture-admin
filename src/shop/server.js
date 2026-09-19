@@ -205,8 +205,8 @@ route('GET', '/api/shop/me', async ({ res, user }) => {
 });
 
 // ─────────────────── 购物车 ───────────────────
-const cartPayload = (userId) => {
-  const items = cartItems(cartOf(userId));
+const cartPayload = (cartId) => {
+  const items = cartItems(cartId);
   const total = items.reduce((a, b) => a + b.subtotal_cents, 0);
   // 注意：spec 必须带出去——验收脚本就是靠它发现「价格按规格取、规格名却丢了」这个 bug 的
   return { items: items.map((i) => ({ id: i.id, productId: i.product_id, skuId: i.sku_id, sku: i.sku, spec: i.spec || '默认', name: i.name, price: i.price_cents / 100, qty: i.qty, stock: i.stock, subtotal: i.subtotal_cents / 100 })), totalCents: total, total: total / 100, count: items.reduce((a, b) => a + b.qty, 0) };
