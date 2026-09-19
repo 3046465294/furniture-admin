@@ -54,7 +54,12 @@ export function isBusinessDataEmpty(db) {
 export function resetDemoData(db, { force = false } = {}) {
   if (!force && !isBusinessDataEmpty(db)) return null;
 
-  db.exec('delete from products; delete from categories; delete from orders; delete from audit_log;');
+  // 注意顺序：先删依赖表再删主表。只清业务数据，不动 users（账号）与 addresses（顾客自己的资料）。
+  // 踩过的坑：最初只删了 orders，导致 order_items / payments / stock_movements 变成孤儿数据，
+  // 商品删除后订单明细还会引用不存在的商品 id。
+  db.exec(`delete from order_items; delete from payments; delete from stock_movements;
+           delete from reviews; delete from cart_items; delete from carts;
+           delete from orders; delete from products; delete from categories; delete from audit_log;`);
 
   const insCat = db.prepare(`insert into categories(name,sort,status,remark,created_by,created_at,updated_by,updated_at)
                              values (?,?,1,?,'seed',?,'seed',?)`);
