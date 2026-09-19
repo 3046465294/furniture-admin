@@ -226,7 +226,7 @@ route('POST', '/api/shop/shipping/quote', async (ctx) => {
 
 route('GET', '/api/shop/cart', async (ctx) => {
   const cartId = resolveCartId(ctx);
-  return json(ctx.res, 200, cartPayload(c.id));
+  return json(ctx.res, 200, cartPayload(cartId));
 });
 route('POST', '/api/shop/cart', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
@@ -244,7 +244,7 @@ route('POST', '/api/shop/cart', async (ctx) => {
   if (want > sku.stock) return json(ctx.res, 409, { error: `「${sku.spec}」库存不足（剩 ${sku.stock} 件）` });
   if (exist) db.prepare('update cart_items set qty = ? where id = ?').run(want, exist.id);
   else db.prepare('insert into cart_items(cart_id, product_id, sku_id, qty, added_at) values (?,?,?,?,?)').run(cartId, pid, sku.id, qty, now());
-  return json(ctx.res, 200, cartPayload(c.id));
+  return json(ctx.res, 200, cartPayload(cartId));
 });
 route('PUT', '/api/shop/cart/:id', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
@@ -252,17 +252,17 @@ route('PUT', '/api/shop/cart/:id', async (ctx) => {
   const row = db.prepare('select * from cart_items where id = ? and cart_id = ?').get(int(ctx.params.id, 1, 1e15, 0), cartId);
   if (!row) return json(ctx.res, 404, { error: '购物车项不存在' });
   const qty = int(ctx.body.qty, 0, 99, 1);
-  if (qty === 0) { db.prepare('delete from cart_items where id = ?').run(row.id); return json(ctx.res, 200, cartPayload(c.id)); }
+  if (qty === 0) { db.prepare('delete from cart_items where id = ?').run(row.id); return json(ctx.res, 200, cartPayload(cartId)); }
   const p = productById(row.product_id);
   if (qty > (p?.stock ?? 0)) return json(ctx.res, 409, { error: `库存不足（剩 ${p?.stock ?? 0} 件）` });
   db.prepare('update cart_items set qty = ? where id = ?').run(qty, row.id);
-  return json(ctx.res, 200, cartPayload(c.id));
+  return json(ctx.res, 200, cartPayload(cartId));
 });
 route('DELETE', '/api/shop/cart/:id', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
   const cartId = resolveCartId(ctx);
   db.prepare('delete from cart_items where id = ? and cart_id = ?').run(int(ctx.params.id, 1, 1e15, 0), cartId);
-  return json(ctx.res, 200, cartPayload(c.id));
+  return json(ctx.res, 200, cartPayload(cartId));
 });
 
 // ─────────────────── 收货地址 ───────────────────
