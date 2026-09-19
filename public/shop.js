@@ -54,9 +54,9 @@ async function viewHome() {
   ]);
   state.cats = cats.rows;
   const promises = [
-    { t: '真实库存', d: '每笔加购都校验当前规格库存，售罄自动禁止下单' },
-    { t: '按规格计价', d: '同一商品不同颜色尺寸独立价格与库存，下单锁定对应规格' },
-    { t: '订单可追溯', d: '每次库存变动与订单状态流转都留痕，后台可查审计' },
+    { t: '正品保障', d: '规格库存实时可查' },
+    { t: '按规格计价', d: '颜色尺寸独立价格' },
+    { t: '发货可追踪', d: '订单状态全程留痕' },
   ];
   main.innerHTML = `
     <section class="hero">
@@ -715,7 +715,7 @@ window.addEventListener('hashchange', route);
 // ────────── PWA：注册 Service Worker（离线壳 + 资源预缓存）──────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=2.0.2', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js?v=3.0.1', { scope: '/' })
       .then((reg) => { window.__faSW = reg.scope; })
       .catch((e) => { console.warn('Service Worker 注册失败（不影响使用）:', e.message); });
   });
