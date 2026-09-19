@@ -49,6 +49,18 @@ const login = async (base, username, password) => {
   return r.status === 200 ? r.cookie : null
 }
 
+// 审计前置：清掉后台账号的历史登录锁定，保证每次跑的起点一致（脚本可重复执行）
+async function clearLoginLock() {
+  try {
+    const { DatabaseSync } = await import('node:sqlite')
+    const db = new DatabaseSync('C:/Users/winner/Desktop/furniture-admin/data/furniture.db')
+    db.prepare('update users set failed_count = 0, locked_until = 0').run()
+    db.close()
+    console.log('  [setup] 已清理登录锁定状态，保证本轮审计起点一致')
+  } catch (e) { console.log('  [setup] 清理锁定失败（忽略）: ' + e.message) }
+}
+await clearLoginLock()
+
 console.log('======== AURUM 安全审计 ========')
 console.log('\n【1】未认证访问（应全部 401）')
 for (const [base, path, label] of [
@@ -146,7 +158,7 @@ console.log('\n【8】登录限流与锁定')
 {
   let last = 0
   for (let i = 0; i < 8; i++) {
-    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'admin', password: 'wrong-' + i } })
+    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'lockprobe_' + Date.now().toString(36), password: 'wrong-' + i } })
     last = r.status
     if (r.status === 429) break
   }
