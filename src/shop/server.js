@@ -277,11 +277,11 @@ route('POST', '/api/shop/checkout', async (ctx) => {
       .run(orderNo, addr.receiver, addr.phone, totalCents, items.reduce((a, b) => a + b.qty, 0),
         `${addr.region} ${addr.detail}${ctx.body.remark ? ' / ' + str(ctx.body.remark, 100) : ''}`, c.username, now(), c.username, now());
     const orderId = Number(r.lastInsertRowid);
-    const insItem = db.prepare('insert into order_items(order_id, product_id, sku, name, price_cents, qty, subtotal_cents) values (?,?,?,?,?,?,?)');
+    const insItem = db.prepare('insert into order_items(order_id, product_id, sku_id, sku, name, price_cents, qty, subtotal_cents) values (?,?,?,?,?,?,?,?)');
     for (const i of items) {
       // 订单明细记录「商品 + 规格」，并优先扣 SKU 库存，最后同步商品级库存（各 SKU 之和）
       const lineName = i.spec && i.spec !== '默认' ? i.name + '（' + i.spec + '）' : i.name;
-      insItem.run(orderId, i.product_id, i.sku, lineName, i.price_cents, i.qty, i.subtotal_cents);
+      insItem.run(orderId, i.product_id, i.sku_id ?? null, i.sku, lineName, i.price_cents, i.qty, i.subtotal_cents);
       if (i.sku_id) db.prepare('update product_skus set stock = stock - ?, updated_at = ? where id = ?').run(i.qty, now(), i.sku_id);
       moveStock(i.product_id, -i.qty, '下单扣减', orderNo);
       syncProductStock(i.product_id);
@@ -325,7 +325,11 @@ route('POST', '/api/shop/orders/:id/cancel', async (ctx) => {
   db.exec('begin');
   try {
     db.prepare("update orders set status = 'cancelled', updated_at = ? where id = ?").run(now(), o.id);
-    for (const it of db.prepare('select * from order_items where order_id = ?').all(o.id)) moveStock(it.product_id, it.qty, '订单取消回补', o.order_no);
+    for (const it of db.prepare('select * from order_items where order_id = ?').all(o.id)) {
+      if (it.sku_id) db.prepare('update product_skus set stock = stock + ?, updated_at = ? where id = ?').run(it.qty, now(), it.sku_id);
+      moveStock(it.product_id, it.qty, '订单取消回补', o.order_no);
+      syncProductStock(it.product_id);
+    }
     db.prepare("update payments set status = 'refunded' where order_id = ? and status = 'paid'").run(o.id);
     db.exec('commit');
   } catch (e) { db.exec('rollback'); return json(ctx.res, 500, { error: '取消失败' }); }
@@ -444,11 +448,12 @@ export function sweepExpiredOrders(nowMs = Date.now()) {
   const done = [];
   for (const o of rows) {
     try {
-      const items = db.prepare('select product_id, qty from order_items where order_id = ?').all(o.id);
+      const items = db.prepare('select product_id, sku_id, qty from order_items where order_id = ?').all(o.id);
       db.exec('begin');
       const upd = db.prepare("update orders set status = 'cancelled', remark = trim(coalesce(remark,'') || ' / 超时未支付自动取消'), updated_by = 'system', updated_at = ? where id = ? and status = 'pending'").run(now(), o.id);
       if (upd.changes !== 1) { db.exec('rollback'); continue }   // 幂等：被别人先处理了
       for (const it of items) {
+        if (it.sku_id) db.prepare('update product_skus set stock = stock + ?, updated_at = ? where id = ?').run(it.qty, now(), it.sku_id);
         moveStock(it.product_id, it.qty, '超时未支付回补', o.order_no);
         syncProductStock(it.product_id);
       }

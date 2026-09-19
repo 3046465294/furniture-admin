@@ -127,6 +127,7 @@ create index if not exists idx_img_product on product_images(product_id);
 
 // 购物车项支持 SKU（老库没有该列时补上，向后兼容）
 try { db.exec('alter table cart_items add column sku_id integer'); } catch { /* 已存在 */ }
+try { db.exec('alter table order_items add column sku_id integer'); } catch { /* 已存在 */ }
 
 /** 幂等迁移：为没有规格的商品生成「默认」SKU，并把老购物车项挂到默认 SKU 上 */
 export function ensureSkus() {

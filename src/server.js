@@ -519,6 +519,7 @@ route('POST', '/api/orders/:id/refund', guard(async ({ req, res, body, params, u
     db.prepare("update orders set status = 'cancelled', remark = ?, updated_by = ?, updated_at = ? where id = ?")
       .run((o.remark ? o.remark + ' / ' : '') + '已退款：' + reason, user.username, now(), id);
     for (const it of items) {
+      if (it.sku_id) db.prepare('update product_skus set stock = stock + ?, updated_at = ? where id = ?').run(it.qty, now(), it.sku_id);
       moveStockDb(it.product_id, it.qty, '退款回补', o.order_no);
     }
     db.prepare("update payments set status = 'refunded' where order_id = ?").run(id);
