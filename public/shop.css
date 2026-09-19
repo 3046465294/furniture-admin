@@ -183,3 +183,103 @@ main:focus { outline: none; }
 /* 演示环境提示：如实但不喧宾夺主 */
 .demo-note { max-width: 720px; margin: 10px auto 0; text-align: center; font-size: 12px; line-height: 1.7; color: var(--dim, rgba(255,244,216,.45)); }
 .demo-note strong { color: var(--sub, rgba(255,244,216,.7)); font-weight: 600; }
+/* ═══════════════════════════════════════════════════════════════
+   风格统一（对作品站）：白底 · 黑字 · 细边框 · 无玻璃无渐变
+   理由：作品站本身是极简黑白风格；商城此前是暗色金色液态玻璃，
+        既不统一也偏花哨。此处以"覆盖层"方式改为实用优先的浅色版，
+        不改动任何 HTML/JS 结构，因此可即时生效、零功能风险。
+   ═══════════════════════════════════════════════════════════════ */
+body.shop {
+  --bg: #ffffff;
+  --bg-elev: #ffffff;
+  --bg-inset: #fafafa;
+  --fg: #111111;
+  --sub: #444444;
+  --dim: #767676;
+  --hair: #e6e6e6;
+  --hair-strong: #d0d0d0;
+  --gold-1: #111111;
+  --gold-2: #111111;
+  --gold-3: #333333;
+  --accent: #111111;
+  background: #ffffff;
+  color: #111111;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 顶栏：去掉玻璃与悬浮，改成一条实的白栏 + 底线 */
+body.shop .shop-head {
+  position: sticky; top: 0; margin: 0; max-width: none;
+  padding: 14px 24px; border-radius: 0;
+  background: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 0; border-bottom: 1px solid var(--hair);
+  box-shadow: none;
+}
+body.shop .shop-main { max-width: 1080px; padding: 28px 24px 80px; }
+body.shop .shop-nav { background: transparent; border: 0; padding: 0; gap: 18px; }
+body.shop .shop-nav .navbtn { padding: 6px 0; border-radius: 0; color: #555; font-size: 14px; }
+body.shop .shop-nav .navbtn:hover { background: transparent; color: #111; }
+body.shop .shop-nav .navbtn.on { color: #111; font-weight: 600; box-shadow: none; background: transparent; border-bottom: 2px solid #111; }
+
+/* 容器与卡片：白底细边，去掉发光与半透明 */
+body.shop .panel, body.shop .card, body.shop .pcard, body.shop .sku-panel, body.shop .detail .panel {
+  background: #ffffff; border: 1px solid var(--hair); border-radius: 10px;
+  box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+body.shop .pcard:hover { border-color: var(--hair-strong); transform: none; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+body.shop .drawer, body.shop .sku-ov, body.shop .toast {
+  background: #ffffff; border: 1px solid var(--hair); border-radius: 12px;
+  backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 8px 28px rgba(0,0,0,.10);
+}
+body.shop .sku-ov { background: rgba(0,0,0,.35); }
+
+/* 按钮：黑底白字主按钮 / 白底黑字次按钮（与作品站一致） */
+body.shop .btn-primary, body.shop .primary, body.shop #addBtn, body.shop #submitOrder, body.shop #doLogin {
+  background: #111111; color: #ffffff; border: 1px solid #111111; border-radius: 8px;
+  box-shadow: none; font-weight: 600;
+}
+body.shop .btn-primary:hover, body.shop .primary:hover, body.shop #addBtn:hover { background: #000000; }
+body.shop .btn-ghost, body.shop .btn, body.shop .ghost, body.shop button:not(.primary):not(.btn-primary) {
+  background: #ffffff; color: #111111; border: 1px solid var(--hair-strong); border-radius: 8px; box-shadow: none;
+}
+body.shop button:not(.primary):not(.btn-primary):hover { border-color: #111111; }
+
+/* 文字层级：价格与标题用纯黑，弱信息用灰 */
+body.shop h1, body.shop h2, body.shop h3, body.shop b, body.shop .price, body.shop .sub {
+  color: #111111;
+}
+body.shop .hero { background: #fafafa; border: 1px solid var(--hair); border-radius: 10px; box-shadow: none; }
+body.shop .hero-badge, body.shop .chips .chip, body.shop .badge {
+  background: #ffffff; border: 1px solid var(--hair-strong); color: #333; border-radius: 999px; box-shadow: none;
+}
+body.shop .badge.ok { background: #ffffff; color: #111; border-color: #111; }
+body.shop .promise, body.shop .tiles .tile { background: #ffffff; border: 1px solid var(--hair); border-radius: 10px; box-shadow: none; }
+body.shop .timeline .tl-dot { box-shadow: none; }
+body.shop .img-main, body.shop .thumbs img { border-radius: 8px; border: 1px solid var(--hair); }
+body.shop .skel, body.shop .skel-line, body.shop .skel-box { background: #f2f2f2; }
+body.shop a { color: #111111; }
+body.shop .demo-note { color: #767676; }
+
+/* ── 第二轮：修掉残留的暗色控件与顶部白带 ── */
+body.shop { padding: 0; margin: 0; }
+body.shop .shop-head { top: 0; margin-top: 0; }
+body.shop input, body.shop select, body.shop textarea {
+  background: #ffffff; color: #111111; border: 1px solid var(--hair-strong);
+  border-radius: 8px; padding: 9px 12px; box-shadow: none; font-size: 14px;
+}
+body.shop input::placeholder, body.shop textarea::placeholder { color: #9a9a9a; }
+body.shop input:focus, body.shop select:focus, body.shop textarea:focus {
+  outline: 2px solid #111111; outline-offset: 1px; border-color: #111111;
+}
+body.shop .shop-search input { background: #ffffff; }
+body.shop .hero {
+  background: #fafafa;
+  background-image: none;
+  border: 1px solid var(--hair);
+}
+body.shop .tiles .tile, body.shop .promise, body.shop .chip { background: #ffffff; }
+body.shop [style*="rgba(255,244,216"], body.shop [style*="rgba(247,205,124"] {
+  background: transparent !important;
+}
+body.shop .img-main { background: #fafafa; }

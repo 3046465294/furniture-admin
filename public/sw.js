@@ -13,7 +13,7 @@ const CACHE_VERSION = 'aurum-shop-v1.6.5';
 const SHELL = [
   '/',
   '/shop.html',
-  '/shop.css?v=1.6.5',
+  '/shop.css?v=1.7.1',
   '/style.css',
   '/shop.js?v=1.6.5',
   '/manifest.json',

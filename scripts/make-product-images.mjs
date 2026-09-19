@@ -14,10 +14,10 @@ const DIR = 'C:/Users/winner/Desktop/furniture-admin/public/img/'
 mkdirSync(DIR, { recursive: true })
 
 const PALETTES = [
-  ['#2a2116', '#6d5326', '#f7cd7c'],
-  ['#1e2420', '#31584a', '#9fe8cf'],
-  ['#241d28', '#5b3a6b', '#e0b8ff'],
-  ['#1d232b', '#33506b', '#a8d4ff'],
+  ['#f4f4f4', '#e8e8e8', '#111111'],
+  ['#f7f6f3', '#ecebe7', '#111111'],
+  ['#f2f4f6', '#e6eaee', '#111111'],
+  ['#f5f3f7', '#eae6ef', '#111111'],
 ]
 
 /** 一张"示意商品图"：渐变底 + 首字 + 商品名 + 视图序号（明确标注非实拍） */
@@ -39,9 +39,9 @@ function svg(name, cat, idx, total) {
   <rect width="800" height="800" fill="url(#g)"/>
   <rect width="800" height="800" fill="url(#sh)"/>
   <text x="400" y="360" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="260" font-weight="700" fill="${acc}" opacity="0.92">${initial}</text>
-  <text x="400" y="470" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="40" fill="#ffffff" opacity="0.92">${safe(name)}</text>
-  <text x="400" y="530" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="26" fill="#ffffff" opacity="0.6">${safe(cat ?? '家居')} · 视图 ${idx + 1}/${total} · 示意图（非实拍）</text>
-  <text x="400" y="740" text-anchor="middle" font-family="system-ui" font-size="22" fill="#ffffff" opacity="0.38">AURUM 家居商城 · 演示素材</text>
+  <text x="400" y="470" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="40" fill="#111111" opacity="0.92">${safe(name)}</text>
+  <text x="400" y="530" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="26" fill="#555555" opacity="0.9">${safe(cat ?? '家居')} · 视图 ${idx + 1}/${total} · 示意图（非实拍）</text>
+  <text x="400" y="740" text-anchor="middle" font-family="system-ui" font-size="22" fill="#999999" opacity="0.9">AURUM 家居商城 · 演示素材</text>
 </svg>
 `
 }
