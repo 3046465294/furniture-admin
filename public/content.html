@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>站点内容管理 · AURUM</title>
+<link rel="stylesheet" href="/style.css?v=3.0.0">
+<style>
+  body { margin: 0; background: #f5f5f7; color: #1d1d1f;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .top h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+  .top .who { font-size: 13px; color: #6e6e73; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+  .tab { padding: 8px 16px; border-radius: 999px; border: 1px solid #d2d2d7; background: #fff; font-size: 14px; cursor: pointer; }
+  .tab.on { background: #1d1d1f; color: #fff; border-color: #1d1d1f; }
+  .cols { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 1px solid #e8e8ed; border-radius: 14px; padding: 16px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .list { display: flex; flex-direction: column; gap: 8px; max-height: 62vh; overflow: auto; }
+  .item { padding: 11px 12px; border: 1px solid #eeeef2; border-radius: 10px; cursor: pointer; background: #fff; }
+  .item:hover { border-color: #d2d2d7; }
+  .item.on { border-color: #0071e3; box-shadow: 0 0 0 2px rgba(0,113,227,.12); }
+  .item b { font-size: 14px; font-weight: 600; display: block; }
+  .item span { font-size: 12px; color: #86868b; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid #d2d2d7; color: #6e6e73; }
+  .pill.live { border-color: #0071e3; color: #0071e3; }
+  label { display: block; font-size: 12.5px; color: #6e6e73; margin: 12px 0 5px; }
+  input, textarea, select { width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #d2d2d7;
+                            border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; color: #1d1d1f; }
+  input:focus, textarea:focus { outline: 2px solid #0071e3; outline-offset: 0; border-color: #0071e3; }
+  textarea { min-height: 220px; line-height: 1.6; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .btn { border-radius: 999px; padding: 9px 18px; font-size: 14px; border: 1px solid #d2d2d7; background: #fff; cursor: pointer; }
+  .btn.primary { background: #0071e3; border-color: #0071e3; color: #fff; }
+  .btn.primary:hover { background: #0077ed; }
+  .btn.danger { color: #c0392b; border-color: #e6b3ac; }
+  .msg { font-size: 12.5px; color: #6e6e73; }
+  .err { color: #c0392b; }
+  .empty { color: #86868b; font-size: 13px; padding: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>站点内容管理</h1>
+    <div class="who" id="who">…</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-kind="projects">项目案例</button>
+    <button class="tab" data-kind="posts">博客文章</button>
+    <button class="tab" data-kind="stats">概览</button>
+  </div>
+
+  <div id="stats" class="card" hidden></div>
+
+  <div class="cols" id="main">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <b id="listTitle" style="font-size:15px">列表</b>
+        <button class="btn" id="newBtn">+ 新建</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <input id="kw" placeholder="搜索标题…" style="flex:1">
+        <select id="st" style="width:110px"><option value="">全部</option><option value="1">已发布</option><option value="0">草稿</option></select>
+      </div>
+      <div class="list" id="list"><div class="empty">加载中…</div></div>
+    </div>
+
+    <div class="card" id="editor">
+      <div class="empty">从左侧选择一条内容，或点「新建」。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+let state = { kind: 'projects', rows: [], cur: null }
+
+async function api(path, opts = {}) {
+  const o = { method: opts.method || 'GET', credentials: 'same-origin', headers: {} }
+  if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.headers['X-Requested-With'] = 'fetch'; o.body = JSON.stringify(opts.body) }
+  // 删除/无 body 的写操作也必须带 CSRF 头（我此前在测试里踩过这个坑）
+  if (o.method !== 'GET') o.headers['X-Requested-With'] = 'fetch'
+  const r = await fetch(path, o)
+  const text = await r.text()
+  let data = {}; try { data = JSON.parse(text) } catch {}
+  if (!r.ok) { const e = new Error(data.error || ('HTTP ' + r.status)); e.status = r.status; throw e }
+  return data
+}
+
+function toast(msg, bad) {
+  let el = $('toast')
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el) }
+  el.textContent = msg
+  el.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;font-size:13.5px;z-index:99;color:#fff;background:' + (bad ? '#c0392b' : '#1d1d1f')
+  clearTimeout(el._t); el._t = setTimeout(() => el.remove(), 2600)
+}
+
+async function boot() {
+  try {
+    const me = await api('/api/auth/me')
+    const u = me.user || me
+    $('who').textContent = (u.nickname || u.username || '已登录') + (u.role ? ' · ' + u.role : '')
+  } catch (e) {
+    $('who').innerHTML = '<span class="err">未登录</span> — 请先到 <a href="/">后台首页</a> 登录'
+  }
+  await load()
+}
+
+async function load() {
+  if (state.kind === 'stats') {
+    try {
+      const s = await api('/api/content/stats')
+      $('main').hidden = true; $('stats').hidden = false
+      $('stats').innerHTML = '<b style="font-size:15px">内容概览</b><div style="margin-top:12px;font-size:14px;line-height:2">'
+        + '项目案例：' + s.projects + ' 条（已发布 ' + s.projectsPublished + '）<br>'
+        + '博客文章：' + s.posts + ' 篇（已发布 ' + s.postsPublished + ' · 草稿 ' + s.postsDraft + '）</div>'
+      return
+    } catch (e) { $('stats').hidden = false; $('stats').innerHTML = '<span class="err">' + e.message + '</span>'; return }
+  }
+  $('stats').hidden = true; $('main').hidden = false
+  $('listTitle').textContent = state.kind === 'projects' ? '项目案例' : '博客文章'
+  const qs = new URLSearchParams()
+  if ($('kw').value.trim()) qs.set('q', $('kw').value.trim())
+  if ($('st').value) qs.set('status', $('st').value)
+  try {
+    const r = await api('/api/content/' + state.kind + (qs.toString() ? '?' + qs : ''))
+    state.rows = r.rows || []
+    render()
+  } catch (e) {
+    $('list').innerHTML = e.status === 404
+      ? '<div class="empty">接口未上线（当前后台进程为旧版本，需重启后台服务）<br>前端已就绪，重启后即可使用。</div>'
+      : '<div class="empty err">加载失败：' + e.message + '</div>'
+  }
+}
+
+function render() {
+  const box = $('list')
+  if (!state.rows.length) { box.innerHTML = '<div class="empty">暂无内容</div>'; return }
+  box.innerHTML = state.rows.map((r) => `
+    <div class="item${state.cur && state.cur.id === r.id ? ' on' : ''}" data-id="${r.id}">
+      <div class="row" style="justify-content:space-between">
+        <b>${esc(r.title)}</b>
+        <span class="pill${r.status ? ' live' : ''}">${r.status ? '已发布' : '草稿'}</span>
+      </div>
+      <span>${esc(r.slug || '')}${state.kind === 'projects' ? ' · 排序 ' + (r.sort ?? 0) : (r.published_at ? ' · ' + esc(String(r.published_at).slice(0, 10)) : '')}</span>
+    </div>`).join('')
+  box.querySelectorAll('.item').forEach((el) => el.addEventListener('click', () => {
+    state.cur = state.rows.find((r) => String(r.id) === el.dataset.id)
+    render(); editor()
+  }))
+}
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]))
+
+function editor() {
+  const r = state.cur
+  if (!r) return
+  const isProj = state.kind === 'projects'
+  $('editor').innerHTML = `
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <b style="font-size:15px">${state.cur.id ? '编辑' : '新建'}</b>
+      <span class="msg">ID ${r.id ?? '（新）'}</span>
+    </div>
+    <label>标题（中文）</label><input id="f_title" value="${esc(r.title || '')}">
+    <label>标题（英文）</label><input id="f_title_en" value="${esc(r.title_en || '')}">
+    <label>slug（留空自动生成）</label><input id="f_slug" value="${esc(r.slug || '')}">
+    <label>摘要（中文）</label><textarea id="f_summary" style="min-height:70px">${esc(r.summary || '')}</textarea>
+    <label>摘要（英文）</label><textarea id="f_summary_en" style="min-height:70px">${esc(r.summary_en || '')}</textarea>
+    <label>标签（逗号分隔）</label><input id="f_tags" value="${esc(r.tags || '')}">
+    <label>封面图路径</label><input id="f_cover" value="${esc(r.cover || '')}">
+    ${isProj ? `<label>排序（数字越小越靠前）</label><input id="f_sort" value="${esc(r.sort ?? 0)}">` : ''}
+    <label>正文（Markdown）</label><textarea id="f_body">${esc(r.body || '')}</textarea>
+    <div class="row" style="margin-top:14px;gap:8px">
+      <button class="btn primary" id="saveBtn">保存</button>
+      <button class="btn" id="togBtn">${r.status ? '转为草稿' : '立即发布'}</button>
+      <button class="btn danger" id="delBtn">删除</button>
+      <span class="msg" id="emsg"></span>
+    </div>`
+  $('saveBtn').addEventListener('click', () => save(r.status))
+  $('togBtn').addEventListener('click', () => save(r.status ? 0 : 1))
+  $('delBtn').addEventListener('click', async () => {
+    if (!confirm('确认删除这条内容？')) return
+    try { await api('/api/content/' + state.kind + '/' + r.id, { method: 'DELETE' }); toast('已删除'); state.cur = null; editor(); load() }
+    catch (e) { $('emsg').textContent = e.message; $('emsg').className = 'msg err' }
+  })
+}
+
+async function save(status) {
+  const r = state.cur || {}
+  const payload = {
+    title: $('f_title').value.trim(),
+    titleEn: $('f_title_en').value.trim(),
+    slug: $('f_slug').value.trim(),
+    summary: $('f_summary').value.trim(),
+    summaryEn: $('f_summary_en').value.trim(),
+    tags: $('f_tags').value.trim(),
+    cover: $('f_cover').value.trim(),
+    body: $('f_body').value,
+    status: status === undefined ? r.status : status,
+  }
+  if (state.kind === 'projects') payload.sort = Number($('f_sort').value || 0)
+  if (!payload.title) { $('emsg').textContent = '标题必填'; $('emsg').className = 'msg err'; return }
+  try {
+    if (r.id) await api('/api/content/' + state.kind + '/' + r.id, { method: 'PUT', body: payload })
+    else { const c = await api('/api/content/' + state.kind, { method: 'POST', body: payload }); state.cur = { id: c.id } }
+    toast('已保存'); await load()
+    state.cur = state.rows.find((x) => x.id === state.cur.id) || state.cur
+    render(); editor()
+  } catch (e) { $('emsg').textContent = e.message; $('emsg').className = 'msg err' }
+}
+
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b))
+  state.kind = b.dataset.kind; state.cur = null; editor(); load()
+}))
+$('newBtn').addEventListener('click', () => {
+  state.cur = { id: null, status: 0, title: '', sort: 0 }
+  editor()
+})
+let t = null
+$('kw').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 300) })
+$('st').addEventListener('change', load)
+
+boot()
+</script>
+</body>
+</html>
