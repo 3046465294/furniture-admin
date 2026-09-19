@@ -15,7 +15,7 @@ const SHELL = [
   '/shop.html',
   '/shop.css?v=1.8.2',
   '/style.css',
-  '/shop.js?v=1.8.0',
+  '/shop.js?v=1.8.2',
   '/manifest.json',
   '/icon.svg',
 ];
