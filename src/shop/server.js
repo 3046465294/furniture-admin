@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * 商城前台服务（8091）—— 顾客侧：浏览 / 搜索 / 购物车 / 下单 / 我的订单
  *
