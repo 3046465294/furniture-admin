@@ -18,7 +18,7 @@ const findings = []
 const check = (level, name, ok, detail = '') => {
   if (ok) pass++; else { fail++; if (level === 'HIGH') high++ }
   findings.push({ level, name, ok, detail })
-  console.log(`  ${ok ? '✅' : '❌'} [${level}] ${name}${detail ? '   ' + detail : ''}`)
+  console.log(`  ${ok ? '[OK]' : '[FAIL]'} [${level}] ${name}${detail ? '   ' + detail : ''}`)
 }
 
 async function req(base, path, opts = {}) {
@@ -39,7 +39,7 @@ const login = async (base, username, password) => {
   return r.status === 200 ? r.cookie : null
 }
 
-console.log('════════ AURUM 安全审计 ════════')
+console.log('======== AURUM 安全审计 ========')
 console.log('\n【1】未认证访问（应全部 401）')
 for (const [base, path, label] of [
   [A, '/api/products', '后台-商品列表'],
@@ -73,7 +73,7 @@ if (viewerCookie) {
   if (adminCookie) {
     const r2 = await req(A, '/api/users', { method: 'POST', json: { username: 'rbac_probe', password: 'Abcd1234', role: 'admin' }, cookie: viewerCookie })
     check('HIGH', 'viewer 尝试建管理员账号', r2.status === 401 || r2.status === 403, `HTTP ${r2.status}`)
-  } else console.log('  ⏭  跳过 RBAC 写检查（未提供 FA_ADMIN_PWD）')
+  } else console.log('  [SKIP]  跳过 RBAC 写检查（未提供 FA_ADMIN_PWD）')
 }
 
 console.log('\n【4】路径穿越与敏感文件暴露（应 404）')
@@ -144,10 +144,10 @@ console.log('\n【9】网关运维接口保护')
   check('LOW', '网关指标端点同样需要令牌', r2.status === 401, `HTTP ${r2.status}`)
 }
 
-console.log('\n════════ 审计结果 ════════')
+console.log('\n======== 审计结果 ========')
 console.log(`  通过 ${pass} 项 · 失败 ${fail} 项（其中 HIGH ${high} 项）`)
 if (high > 0) {
-  console.log('  ❌ 存在高风险未通过项，禁止发布：')
+  console.log('  [FAIL] 存在高风险未通过项，禁止发布：')
   findings.filter((f) => !f.ok && f.level === 'HIGH').forEach((f) => console.log('     · ' + f.name + '  ' + f.detail))
 }
 process.exit(high > 0 ? 1 : 0)
