@@ -30,6 +30,10 @@ const PORT = Number(process.env.SHOP_PORT ?? 8091);
 const HOST = process.env.SHOP_HOST ?? '127.0.0.1';
 const VERSION = '1.0.0';
 const MAX_BODY = 256 * 1024;
+/** 未支付订单超时时间（分钟），可用 ORDER_TIMEOUT_MIN 覆盖；0 = 关闭自动释放 */
+const ORDER_TIMEOUT_MIN = Number(process.env.ORDER_TIMEOUT_MIN ?? 15);
+/** 扫描周期（秒） */
+const SWEEP_INTERVAL_SEC = Number(process.env.ORDER_SWEEP_SEC ?? 60);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -372,6 +376,9 @@ route('GET', '/api/shop/health', async ({ res }) => json(res, 200, {
   status: 'ok', service: 'shop', version: VERSION, uptimeSec: Math.round(process.uptime()),
   products: db.prepare('select count(*) c from products where deleted = 0 and status = 1').get().c,
   orders: db.prepare('select count(*) c from orders where deleted = 0').get().c,
+  pendingOrders: db.prepare("select count(*) c from orders where deleted = 0 and status = 'pending'").get().c,
+  orderTimeoutMin: ORDER_TIMEOUT_MIN,
+  sweepIntervalSec: SWEEP_INTERVAL_SEC,
 }));
 
 function match(method, pathname) {
@@ -421,6 +428,55 @@ const server = createServer(async (req, res) => {
     recordRequest({ method: req.method, path: pathname, status: err?.status ?? 500, ms: Date.now() - t0, note: '异常' });
   }
 });
+/**
+ * 扫描并自动取消超时未支付订单，回补库存。
+ * 返回本次处理的订单号列表（便于测试与日志）。
+ */
+export function sweepExpiredOrders(nowMs = Date.now()) {
+  if (!ORDER_TIMEOUT_MIN || ORDER_TIMEOUT_MIN <= 0) return [];
+  const deadline = nowMs - ORDER_TIMEOUT_MIN * 60 * 1000;
+  const rows = db.prepare(`
+    select id, order_no, created_at from orders
+    where deleted = 0 and status = 'pending'
+      and (julianday(created_at) * 86400000) < ?
+    order by id limit 50
+  `).all(deadline);
+  const done = [];
+  for (const o of rows) {
+    try {
+      const items = db.prepare('select product_id, qty from order_items where order_id = ?').all(o.id);
+      db.exec('begin');
+      const upd = db.prepare("update orders set status = 'cancelled', remark = trim(coalesce(remark,'') || ' / 超时未支付自动取消'), updated_by = 'system', updated_at = ? where id = ? and status = 'pending'").run(now(), o.id);
+      if (upd.changes !== 1) { db.exec('rollback'); continue }   // 幂等：被别人先处理了
+      for (const it of items) {
+        moveStock(it.product_id, it.qty, '超时未支付回补', o.order_no);
+        syncProductStock(it.product_id);
+      }
+      db.prepare("update payments set status = 'expired' where order_id = ? and status = 'pending'").run(o.id);
+      db.prepare('insert into audit_log(actor,action,target,detail,ip,created_at) values (?,?,?,?,?,?)')
+        .run('system', 'order_timeout_cancel', 'order#' + o.id, o.order_no + ' 超时 ' + ORDER_TIMEOUT_MIN + ' 分钟未支付，已自动取消并回补库存', 'internal', now());
+      db.exec('commit');
+      done.push(o.order_no);
+    } catch (e) {
+      try { db.exec('rollback') } catch {}
+      console.error('[sweep] 处理订单 ' + o.order_no + ' 失败: ' + e.message);
+    }
+  }
+  return done;
+}
+
+// 后台定时扫单：单机演示用 setInterval 足够；多实例部署应换成分布式调度（避免重复扫描）
+let sweepTimer = null;
+if (ORDER_TIMEOUT_MIN > 0) {
+  sweepTimer = setInterval(() => {
+    try {
+      const done = sweepExpiredOrders();
+      if (done.length) console.log('[sweep] 自动取消超时订单 ' + done.length + ' 笔：' + done.join(', '));
+    } catch (e) { console.error('[sweep] 扫描失败: ' + e.message) }
+  }, Math.max(10, SWEEP_INTERVAL_SEC) * 1000);
+  sweepTimer.unref?.();
+}
+
 // 启动即做一次幂等迁移（老商品补默认规格、老购物车挂到默认规格）
 const migrated = ensureSkus();
 
@@ -428,6 +484,7 @@ server.listen(PORT, HOST, () => {
   console.log(`[AURUM 商城前台 v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
   console.log(`  顾客侧：浏览/搜索/购物车/下单/我的订单   监控：/api/shop/metrics.prom`);
   if (migrated.created) console.log(`  [迁移] 为 ${migrated.created} 个商品补了默认规格，修正 ${migrated.cartsFixed} 条购物车记录`);
+  console.log(`  未支付订单超时释放：${ORDER_TIMEOUT_MIN > 0 ? ORDER_TIMEOUT_MIN + " 分钟（每 " + SWEEP_INTERVAL_SEC + " 秒扫描）" : "已关闭"}`);
   console.log(`  规格(SKU)：${db.prepare('select count(*) c from product_skus').get().c} 条 · 商品图：${db.prepare('select count(*) c from product_images').get().c} 张`);
 });
 export { server };
