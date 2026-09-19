@@ -38,7 +38,7 @@ const MIME = {
 };
 const json = (res, status, body, extra = {}) => {
   const payload = JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(payload), ...extra });
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(payload), ...extra });
   res.end(payload);
   return { status };
 };

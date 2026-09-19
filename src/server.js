@@ -44,7 +44,7 @@ const json = (res, status, body, extraHeaders = {}) => {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(payload),
+    'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(payload),
     ...extraHeaders,
   });
   res.end(payload);
