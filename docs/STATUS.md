@@ -84,6 +84,7 @@ cd <repo>
 # 功能验收（自带夹具，可重复执行）
 node scripts/accept-module1.mjs          # 商品域：规格/加购/超卖/回补 14 项
 node scripts/security-audit.mjs          # 安全审计：9 大类 35 项（HIGH 未过则退出码非 0）
+node scripts/verify-a11y-fixture.mjs     # 先建多规格夹具（门禁前置条件）
 node scripts/release-gate.mjs --fast     # 发布门禁：健康 → 验收 → 安全 → 性能冒烟
 
 # 性能（阶梯加压 + 业务比例 + SLO 门禁 + 基线归档）
