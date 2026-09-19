@@ -560,3 +560,82 @@ body.shop .promise-item p { font-size: 11px; color: #86868b; margin: 0; line-hei
 body.shop .drawer { border-radius: 20px 0 0 20px; background: rgba(255,255,255,.86); backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px); border-left: .5px solid rgba(0,0,0,.08); }
 
 @media (max-width: 400px) { body.shop .grid { gap: 8px; } body.shop .shop-main { padding: 8px 8px 88px; } }
+
+/* ═══════════════════════════════════════════════════════════════
+   苹果商城（Apple Store）风格 · 最终基准
+   特征：白底 · 大图 · 大留白 · 黑/灰/单一蓝 · 无红价无九宫格无徽标海
+   ═══════════════════════════════════════════════════════════════ */
+body.shop { background: #ffffff !important; color: #1d1d1f; }
+body.shop .shop-main { max-width: 700px; padding: 0 16px 110px; }
+body.shop .shop-main > * + * { margin-top: 56px; }
+
+/* 顶栏：苹果式极细磨砂条，只留小字导航 + 搜索 */
+body.shop .shop-head { padding: 9px 16px; background: rgba(251,251,253,.8); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid rgba(0,0,0,.08); }
+body.shop .shop-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+body.shop .shop-nav .navbtn { font-size: 12px; color: #6e6e73; }
+body.shop .shop-search input { background: #f5f5f7; border: 0; border-radius: 999px; font-size: 13.5px; padding: 8px 14px; }
+body.shop .shop-search button { border-radius: 999px; font-size: 13px; padding: 7px 16px; }
+
+/* Hero：苹果式居中大字 + 一行说明 + 蓝色文字链接（不用彩色卡片） */
+body.shop .hero {
+  text-align: center; padding: 40px 0 8px; margin: 0; border-radius: 0;
+  background: transparent !important; backdrop-filter: none !important;
+  border: 0 !important; box-shadow: none !important;
+}
+body.shop .hero .hero-badge { display: none; }                     /* 去掉小标签 */
+body.shop .hero h1 { font-size: clamp(28px, 8vw, 44px); font-weight: 700; letter-spacing: -.03em; line-height: 1.08; text-align: center; margin: 0 0 10px; }
+body.shop .hero p { font-size: 15px; color: #6e6e73; text-align: center; max-width: 420px; margin: 0 auto 18px; }
+body.shop .hero .btn { border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 400; }
+body.shop .hero .btn-primary { background: #0071e3; border-color: #0071e3; }
+
+/* 承诺条：苹果式一行灰字，不做卡片 */
+body.shop .promise { display: flex; justify-content: center; gap: 28px; background: transparent; margin: 0; }
+body.shop .promise-item { background: transparent !important; box-shadow: none !important; padding: 0; text-align: center; }
+body.shop .promise-item b { font-size: 13px; font-weight: 600; display: block; margin-bottom: 2px; }
+body.shop .promise-item p { font-size: 11.5px; color: #86868b; margin: 0; }
+
+/* 分类：苹果式——一行小字链接，不要九宫格图标块 */
+body.shop .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; background: transparent; box-shadow: none; padding: 0; }
+body.shop .tiles .tile { padding: 0; text-align: center; }
+body.shop .tiles .tile::before { display: none !important; }        /* 去掉方块图标 */
+body.shop .tiles .tile b, body.shop .tiles .tile strong { font-size: 14px; font-weight: 400; color: #0066cc; margin: 0; display: inline; }
+body.shop .tiles .tile .dim, body.shop .tiles .tile span { display: none; }   /* 隐藏"3 件在售" */
+
+/* 分类胶囊行：苹果式细链接行 */
+body.shop .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; overflow: visible; }
+body.shop .chips .chip { background: transparent; border: 0; padding: 0; font-size: 14px; color: #0066cc; }
+body.shop .chips .chip.on { background: transparent; color: #1d1d1f; font-weight: 600; }
+
+/* 分区标题：苹果式大标题 + 左对齐 */
+body.shop h2 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; text-align: left; }
+body.shop .floor-head { margin-bottom: 14px; }
+body.shop .floor-head .dim, body.shop .shop-main > section > p { font-size: 13px; color: #86868b; }
+
+/* 商品卡：苹果式——白底大图 + 粗体名 + 灰色价格 + 蓝色文字按钮 */
+body.shop .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+body.shop .pcard { background: #fbfbfd; border: 0; border-radius: 18px; box-shadow: none; padding: 0 0 16px; overflow: hidden; }
+body.shop .pcard:hover { transform: none; box-shadow: none; }
+body.shop .pcard .thumb { aspect-ratio: 1/1; background: #f5f5f7; border-radius: 14px; margin: 12px 12px 0; }
+body.shop .pcard .nm { font-size: 14px; font-weight: 600; letter-spacing: -.01em; margin: 12px 14px 3px; color: #1d1d1f; }
+body.shop .pcard .dim { font-size: 11.5px; color: #86868b; margin: 0 14px 8px; }
+body.shop .pcard .price { color: #1d1d1f !important; font-size: 14px; font-weight: 400; margin: 0 14px; }
+body.shop .pcard .btn, body.shop .pcard button { background: transparent !important; border: 0 !important; color: #0066cc !important; font-size: 13.5px !important; padding: 6px 14px !important; margin: 8px 8px 0 !important; font-weight: 400; }
+body.shop .pcard .btn:hover, body.shop .pcard button:hover { text-decoration: underline; }
+
+/* 通用按钮：苹果蓝胶囊 */
+body.shop .btn-primary, body.shop .primary, body.shop #addBtn, body.shop #submitOrder, body.shop #doLogin {
+  background: #0071e3; border-color: #0071e3; border-radius: 999px; font-weight: 400;
+}
+body.shop button:not(.primary):not(.btn-primary):not(.chip), body.shop .btn, body.shop .ghost { border-radius: 999px; border-color: #d2d2d7; }
+body.shop a { color: #0066cc; }
+body.shop .panel { background: #fbfbfd; border: 0; border-radius: 18px; box-shadow: none; }
+
+/* ── 修我这轮引入的三个问题 ── */
+/* ① 分类名称必须可见（上一版把 span 全隐藏导致整块空白） */
+body.shop .tiles .tile span, body.shop .tiles .tile b, body.shop .tiles .tile strong { display: inline !important; font-size: 14px; font-weight: 400; color: #0066cc; }
+body.shop .tiles .tile { min-width: 72px; }
+/* ③ Hero 大标题限制宽度，避免出现"生活"这种孤字换行 */
+body.shop .hero h1 { max-width: 12em; margin-left: auto; margin-right: auto; }
+/* ② 承诺条：手机上不做三栏，改一行两列短语 */
+body.shop .promise { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+body.shop .promise-item p { font-size: 11px; line-height: 1.35; }
