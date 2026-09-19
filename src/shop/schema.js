@@ -143,7 +143,7 @@ export function cartOfGuest(guestKey) {
   if (!guestKey) return null;
   let row = db.prepare('select * from carts where guest_key = ? and user_id is null order by id desc limit 1').get(guestKey);
   if (!row) {
-    const r = db.prepare('insert into carts(user_id, guest_key, created_at, updated_at) values (null, ?, ?, ?)').run(guestKey, now(), now());
+    const r = db.prepare('insert into carts(user_id, guest_key, created_at) values (null, ?, ?)').run(guestKey, now());
     row = { id: Number(r.lastInsertRowid), guest_key: guestKey, user_id: null };
   }
   return row.id;
