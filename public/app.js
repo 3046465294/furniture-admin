@@ -703,3 +703,89 @@ async function boot() {
   btn.addEventListener('click', () => setTimeout(render, 60));
   setInterval(() => { if (!view.hidden) render(); }, 2000);
 })();
+
+// ══════════ 商品规格（SKU）管理 ══════════
+// 用 MutationObserver 在渲染后为每行追加「规格」入口 —— 不改动原有行模板，降低侵入风险。
+// 接口未上线时（旧实例）优雅提示，不报错、不白屏。
+function openSkuModal(pid) {
+  const ov = document.createElement('div');
+  ov.className = 'sku-ov';
+  ov.innerHTML = `<div class="sku-panel">
+    <div class="row-between" style="margin-bottom:12px"><b>商品规格管理</b><button class="ghost" data-close>关闭</button></div>
+    <div data-body class="dim">加载中…</div></div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', (e) => { if (e.target === ov || e.target.closest('[data-close]')) close(); });
+  const onEsc = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+  const body = ov.querySelector('[data-body]');
+
+  const load = async () => {
+    try {
+      const r = await api('/api/products/' + pid + '/skus');
+      body.innerHTML = `<table class="sku-tb"><thead><tr><th>规格</th><th>价格</th><th>库存</th><th>编码</th><th>状态</th><th></th></tr></thead><tbody>`
+        + r.rows.map((s) => `<tr data-sid="${s.id}">
+            <td>${esc(s.spec)}</td>
+            <td><input class="sk-p" value="${(s.price_cents / 100).toFixed(2)}"${s.status ? '' : ' disabled'}></td>
+            <td><input class="sk-s" value="${s.stock}"${s.status ? '' : ' disabled'} style="width:86px"></td>
+            <td class="dim">${esc(s.sku_code || '—')}</td>
+            <td>${s.status ? '<span class="badge ok">启用</span>' : '<span class="badge off">已停用</span>'}</td>
+            <td class="tools">${s.status ? `<button data-save="${s.id}">保存</button><button data-off="${s.id}">停用</button>` : ''}</td>
+          </tr>`).join('') + '</tbody></table>'
+        + `<div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+             <input data-new-spec placeholder="新规格名（如 米白 / 三人位）" style="flex:1;min-width:180px">
+             <input data-new-price placeholder="价格" style="width:96px">
+             <input data-new-stock placeholder="库存" style="width:86px">
+             <button class="primary" data-add>新增规格</button></div>
+           <p class="dim" style="margin:10px 0 0">商品级库存 = 各启用规格之和，保存后自动重算。</p>`;
+    } catch (e) {
+      body.innerHTML = e.status === 404
+        ? '<p class="dim">规格管理接口尚未上线（当前后台为旧版本，需重启后台服务）。前台规格选择与下单不受影响。</p>'
+        : '<p class="dim">加载失败：' + esc(e.message) + '</p>';
+      return;
+    }
+    const H = { 'X-Requested-With': 'fetch' };
+    body.querySelectorAll('[data-save]').forEach((b) => b.addEventListener('click', async () => {
+      const tr = b.closest('tr');
+      const price = Number(tr.querySelector('.sk-p').value);
+      const stock = Number(tr.querySelector('.sk-s').value);
+      try { const r = await api('/api/skus/' + b.dataset.save, { method: 'PUT', headers: H, body: { price, stock } }); toast('已保存 · 商品级库存 ' + r.productStock); load(); }
+      catch (err) { toast(err.message); }
+    }));
+    body.querySelectorAll('[data-off]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('停用该规格？停用后前台不可选（至少保留一个启用规格）。')) return;
+      try { const r = await api('/api/skus/' + b.dataset.off, { method: 'DELETE', headers: H }); toast('已停用 · 商品级库存 ' + r.productStock); load(); }
+      catch (err) { toast(err.message); }
+    }));
+    body.querySelector('[data-add]')?.addEventListener('click', async () => {
+      const spec = body.querySelector('[data-new-spec]').value.trim();
+      const price = body.querySelector('[data-new-price]').value;
+      const stock = body.querySelector('[data-new-stock]').value;
+      if (!spec) return toast('请填写规格名');
+      try { const r = await api('/api/products/' + pid + '/skus', { method: 'POST', headers: H, body: { spec, price, stock } }); toast('已新增 · 商品级库存 ' + r.productStock); load(); }
+      catch (err) { toast(err.message); }
+    });
+  };
+  load();
+}
+
+(function skuAdmin() {
+  const root = document.getElementById('pBody');
+  if (!root) return;
+  const decorate = () => {
+    root.querySelectorAll('tr').forEach((tr) => {
+      const editBtn = tr.querySelector('[data-edit]');
+      if (!editBtn) return;
+      const tools = editBtn.closest('.tools');
+      if (!tools || tools.querySelector('[data-sku]')) return;
+      const b = document.createElement('button');
+      b.dataset.sku = editBtn.dataset.edit;
+      b.textContent = '规格';
+      b.title = '管理该商品的规格（价格 / 库存 / 停用）';
+      tools.appendChild(b);
+    });
+  };
+  new MutationObserver(decorate).observe(root, { childList: true, subtree: true });
+  decorate();
+  root.addEventListener('click', (e) => { const b = e.target.closest('[data-sku]'); if (b) openSkuModal(Number(b.dataset.sku)); });
+})();

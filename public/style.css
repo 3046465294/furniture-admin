@@ -354,3 +354,11 @@ table.mini th, table.mini td { padding: 8px 9px; border-bottom: 1px solid rgba(2
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
 }
+
+/* ── 规格管理弹窗 ── */
+.sku-ov { position: fixed; inset: 0; z-index: 90; background: rgba(4,3,2,.6); backdrop-filter: blur(8px); display: grid; place-items: center; padding: 20px; }
+.sku-panel { width: min(760px, 96vw); max-height: 86vh; overflow: auto; padding: 20px; border-radius: 18px; border: 1px solid var(--hair); background: linear-gradient(158deg, rgba(30,25,17,.96), rgba(14,11,8,.98)); box-shadow: 0 30px 70px -30px rgba(0,0,0,.95); }
+.sku-tb { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sku-tb th { text-align: left; color: var(--dim); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid rgba(255,244,216,.12); }
+.sku-tb td { padding: 6px 8px; border-bottom: 1px solid rgba(255,244,216,.07); }
+.sku-tb input { width: 110px; padding: 5px 8px; font-size: 13px; }
