@@ -4,11 +4,14 @@ const main = $('main');
 const state = { user: null, cats: [], cart: null, listQuery: { q: '', category: 0, sort: 'new', page: 1 } };
 
 // ────────── 请求封装（变更类请求带 CSRF 自定义头，与后台一致）──────────
+/** 缓存治理：GET 请求追加时间戳，绕开浏览器启发式缓存（服务端已设 no-store，这里是双保险） */
+const bustPath = (p, method) => (method === 'GET' ? p + (p.includes('?') ? '&' : '?') + '_=' + Date.now() : p);
+
 async function api(path, { method = 'GET', body } = {}) {
   const o = { method, credentials: 'same-origin', headers: {} };
   if (body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
   if (method !== 'GET') o.headers['X-Requested-With'] = 'fetch';
-  const res = await fetch(path, o);
+  const res = await fetch(bustPath(path, method), o);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
   return data;
@@ -113,7 +116,7 @@ async function viewList(params) {
 }
 
 async function viewProduct(id) {
-  const { product: p, reviews } = await api('/api/shop/products/' + id);
+  const { product: p, reviews, skus } = await api('/api/shop/products/' + id);
   main.innerHTML = `
     <div class="steps"><a href="#/" class="muted">首页</a> / <span>${esc(p.category ?? '未分类')}</span> / <b>${esc(p.name)}</b></div>
     <div class="detail panel">
@@ -125,9 +128,9 @@ async function viewProduct(id) {
           ${p.rating > 0 ? `<span class="dim">★ ${p.rating}（${p.reviewCount} 条评价）</span>` : '<span class="dim">暂无评价</span>'}
         </div>
         <div class="price-lg" id="skuPrice">${money(p.price)}</div>
-        ${p.skus && p.skus.length > 1 ? `<div class="row" id="skuBox" style="margin:14px 0;gap:8px;flex-wrap:wrap">
+        ${skus && skus.length > 1 ? `<div class="row" id="skuBox" style="margin:14px 0;gap:8px;flex-wrap:wrap">
           <span class="dim">规格</span>
-          ${p.skus.map((k, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-sku="${k.id}" data-price="${k.priceCents}" data-stock="${k.stock}" data-code="${esc(k.skuCode || '')}">${esc(k.spec)}${k.stock <= 0 ? '（缺货）' : ''}</button>`).join('')}
+          ${skus.map((k, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-sku="${k.id}" data-price="${k.priceCents}" data-stock="${k.stock}" data-code="${esc(k.skuCode || '')}">${esc(k.spec)}${k.stock <= 0 ? '（缺货）' : ''}</button>`).join('')}
           <span class="muted" id="skuMeta"></span>
         </div>` : ''}
         <dl>
@@ -154,7 +157,7 @@ async function viewProduct(id) {
     $('qtyIn').value = Math.max(1, Math.min(99, qty() + Number(b.dataset.q)));
   }));
   // 规格选择：切换后联动价格、库存、SKU 编码；缺货自动禁用加购
-  let chosenSku = p.skus && p.skus.length ? p.skus[0].id : null;
+  let chosenSku = skus && skus.length ? skus[0].id : null;
   const skuBox = $('skuBox');
   if (skuBox) {
     const meta = $('skuMeta');
