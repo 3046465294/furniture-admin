@@ -541,7 +541,9 @@ async function viewOrderDetail(orderNo) {
       ${items.map((i) => `<div class="citem"><div class="mini">${initial(i.name)}</div>
         <div><div class="nm">${esc(i.name)}</div><div class="dim">SKU ${esc(i.sku)} · ${money(i.price)} × ${i.qty}</div></div>
         <div class="sub">${money(i.subtotal)}</div></div>`).join('')}
-      <div class="row-between" style="margin-top:16px"><span>合计</span><b style="color:var(--gold-2);font-size:20px">${money(o.total)}</b></div>
+      <div class="row-between" style="margin-top:16px"><span class="muted">商品合计</span><b>${money(o.goods ?? o.total)}</b></div>
+      <div class="row-between" style="margin-top:6px"><span class="muted">运费</span><span>${(o.shipping ?? 0) > 0 ? money(o.shipping) : '免运费'}</span></div>
+      <div class="row-between" style="margin-top:10px"><span>应付合计</span><b style="color:var(--gold-2);font-size:20px">${money(o.total)}</b></div>
       <hr class="hr">
       <dl style="display:grid;grid-template-columns:96px 1fr;gap:7px 12px;color:var(--sub);font-size:13.5px;margin:0">
         <dt class="dim">收货人</dt><dd>${esc(o.receiver)} ${esc(o.phone)}</dd>
