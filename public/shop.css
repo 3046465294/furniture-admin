@@ -113,3 +113,10 @@ button.chip { font: inherit; cursor: pointer; }
 button.chip.on { color: #2a1c07; font-weight: 600; background: linear-gradient(135deg, var(--gold-1), var(--gold-3)); border-color: transparent; }
 button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed; }
 #skuMeta { font-size: 12.5px; }
+/* 图画廊 */
+.detail .big img { width: 100%; height: 100%; object-fit: cover; border-radius: 18px; display: block; }
+.thumbs { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.thumb { padding: 0; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; border: 1px solid var(--hair); background: transparent; cursor: pointer; transition: border-color .2s var(--ease), transform .2s var(--ease); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb:hover { transform: translateY(-2px); }
+.thumb.on { border-color: var(--gold-2); box-shadow: 0 0 0 3px rgba(247, 205, 124, .18); }

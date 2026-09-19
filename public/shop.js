@@ -116,11 +116,14 @@ async function viewList(params) {
 }
 
 async function viewProduct(id) {
-  const { product: p, reviews, skus } = await api('/api/shop/products/' + id);
+  const { product: p, reviews, skus, images } = await api('/api/shop/products/' + id);
   main.innerHTML = `
     <div class="steps"><a href="#/" class="muted">首页</a> / <span>${esc(p.category ?? '未分类')}</span> / <b>${esc(p.name)}</b></div>
     <div class="detail panel">
-      <div class="big">${initial(p.name)}</div>
+      <div>
+        <div class="big" id="galleryMain">${images && images.length ? `<img src="${esc(images[0])}" alt="${esc(p.name)} 示意图" loading="lazy">` : initial(p.name)}</div>
+        ${images && images.length > 1 ? `<div class="thumbs" id="gallery">${images.map((u, i) => `<button class="thumb ${i === 0 ? 'on' : ''}" data-img="${esc(u)}"><img src="${esc(u)}" alt="视图 ${i + 1}" loading="lazy"></button>`).join('')}</div>` : ''}
+      </div>
       <div>
         <h1>${esc(p.name)}</h1>
         <div class="row" style="margin-bottom:12px">
@@ -157,6 +160,18 @@ async function viewProduct(id) {
     $('qtyIn').value = Math.max(1, Math.min(99, qty() + Number(b.dataset.q)));
   }));
   // 规格选择：切换后联动价格、库存、SKU 编码；缺货自动禁用加购
+  // 图画廊：点缩略图切换主图
+  const gallery = $('gallery');
+  if (gallery) {
+    gallery.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-img]');
+      if (!b) return;
+      gallery.querySelectorAll('[data-img]').forEach((x) => x.classList.toggle('on', x === b));
+      const main = $('galleryMain');
+      if (main) main.innerHTML = '<img src="' + b.dataset.img + '" alt="' + esc(p.name) + ' 示意图">';
+    });
+  }
+
   let chosenSku = skus && skus.length ? skus[0].id : null;
   const skuBox = $('skuBox');
   if (skuBox) {
