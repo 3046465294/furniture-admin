@@ -83,7 +83,8 @@ cd <repo>
 
 # 功能验收（自带夹具，可重复执行）
 node scripts/accept-module1.mjs          # 商品域：规格/加购/超卖/回补 14 项
-node scripts/security-audit.mjs          # 安全审计：9 大类 35 项（HIGH 未过则退出码非 0）
+FA_ADMIN_PWD=<后台口令> node scripts/security-audit.mjs   # 安全审计：9 大类 35 项（HIGH 未过则退出码非 0）
+# 注：审计的 RBAC 写检查需要后台口令；缺省时它**拒绝静默跳过**并计 HIGH 失败（这是刻意设计）
 node scripts/verify-a11y-fixture.mjs     # 先建多规格夹具（门禁前置条件）
 node scripts/release-gate.mjs --fast     # 发布门禁：健康 → 验收 → 安全 → 性能冒烟
 
