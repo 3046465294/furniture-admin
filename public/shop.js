@@ -721,7 +721,7 @@ window.addEventListener('hashchange', route);
 // ────────── PWA：注册 Service Worker（离线壳 + 资源预缓存）──────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=1.8.2', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js?v=2.0.0', { scope: '/' })
       .then((reg) => { window.__faSW = reg.scope; })
       .catch((e) => { console.warn('Service Worker 注册失败（不影响使用）:', e.message); });
   });

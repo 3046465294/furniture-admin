@@ -363,3 +363,121 @@ body.shop .panel { background: #ffffff; background-image: none; backdrop-filter:
 body.shop .drawer { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 body.shop .toast { background: #111827; background-image: none; color: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #111827; }
 body.shop .report, body.shop .notice, body.shop [class*="glass"] { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ═══════════════════════════════════════════════════════════════
+   首页 · 苹果式美学（Apple design language）
+   要点：① 留白即设计——去掉满屏描边，靠间距与阴影分区
+        ② 大字级 + 紧字距（-0.02em）——标题要"压得住"
+        ③ 卡片不描边：白底 + 极轻阴影 + 18~22px 圆角
+        ④ 分区纵向留白 96~128px，内容最大宽度收窄到 980px
+        ⑤ 导航细磨砂（Apple 顶层质感，弱化到几乎看不见）
+   ═══════════════════════════════════════════════════════════════ */
+body.shop {
+  --fg: #1d1d1f;
+  --sub: #6e6e73;
+  --dim: #86868b;
+  --hair: #f0f0f2;
+  --hair-strong: #d2d2d7;
+  background: #ffffff;
+  color: #1d1d1f;
+  letter-spacing: -0.01em;
+}
+/* 顶部导航：细磨砂、无边框，只有一条极淡的分隔 */
+body.shop .shop-head {
+  background: rgba(255,255,255,.72);
+  backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  padding: 12px 28px;
+}
+body.shop .shop-name { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+body.shop .shop-nav .navbtn { font-size: 13.5px; color: #6e6e73; padding: 6px 10px; }
+body.shop .shop-nav .navbtn:hover { color: #1d1d1f; }
+body.shop .shop-nav .navbtn.on { color: #1d1d1f; border-bottom: 0; font-weight: 500; }
+body.shop .shop-search input {
+  border: 0; background: rgba(0,0,0,.045); border-radius: 10px; padding: 8px 14px; font-size: 14px;
+}
+body.shop .shop-search input:focus { background: #fff; outline: 2px solid #0071e3; outline-offset: 0; }
+body.shop .shop-search button { border-radius: 10px; }
+
+/* 内容区：收窄 + 大留白 */
+body.shop .shop-main { max-width: 980px; padding: 0 24px 120px; }
+body.shop .shop-main > * + * { margin-top: 96px; }
+
+/* Hero：居中大标题，像苹果产品页那样"一句话压住整屏" */
+body.shop .hero {
+  background: transparent; border: 0; box-shadow: none; border-radius: 0;
+  text-align: center; padding: 96px 0 24px; margin: 0;
+}
+body.shop .hero h1, body.shop .hero h2 {
+  font-size: clamp(38px, 6.2vw, 64px); font-weight: 700; letter-spacing: -.035em; line-height: 1.05;
+  margin: 0 0 18px; color: #1d1d1f;
+}
+body.shop .hero p { font-size: clamp(17px, 2.2vw, 21px); color: #6e6e73; line-height: 1.5; letter-spacing: -.01em; max-width: 620px; margin: 0 auto 28px; }
+body.shop .hero-badge { border: 0; background: transparent; color: #86868b; font-size: 13px; letter-spacing: .01em; padding: 0; margin-bottom: 12px; }
+body.shop .hero .btn, body.shop .hero .btn-primary, body.shop .hero .primary {
+  border-radius: 980px; padding: 12px 26px; font-size: 15px; font-weight: 500; margin: 0 6px;
+}
+body.shop .hero .btn-primary, body.shop .hero .primary { background: #0071e3; border-color: #0071e3; }
+body.shop .hero .btn-primary:hover, body.shop .hero .primary:hover { background: #0077ed; }
+body.shop .hero .btn, body.shop .hero .ghost { border-color: #d2d2d7; color: #1d1d1f; }
+
+/* 统计数字：从"仪表盘感"改为苹果式的克制小字 */
+body.shop .hero .stats, body.shop .stats, body.shop .metrics {
+  border: 0; background: transparent; display: flex; justify-content: center; gap: 44px; margin-top: 42px; padding: 0;
+}
+body.shop .stats > *, body.shop .metrics > * { background: transparent; border: 0; text-align: center; }
+body.shop .stats b, body.shop .metrics b { font-size: 24px; font-weight: 600; letter-spacing: -.02em; color: #1d1d1f; }
+body.shop .stats span, body.shop .metrics span { font-size: 12.5px; color: #86868b; }
+
+/* 分区标题：苹果式「大标题 + 一行说明 + 右侧细链接」 */
+body.shop h2 { font-size: clamp(26px, 3.4vw, 38px); font-weight: 700; letter-spacing: -.03em; line-height: 1.12; margin: 0 0 10px; }
+body.shop h3 { font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
+body.shop .shop-main > section > p, body.shop .section-sub { color: #6e6e73; font-size: 17px; margin: 0 0 28px; }
+
+/* 卡片组：去掉描边，改"白底 + 极轻阴影 + 大圆角"，图片占比更大 */
+body.shop .promise, body.shop .promise-item, body.shop .tiles .tile {
+  border: 0; background: #fbfbfd; border-radius: 20px; padding: 28px 26px; box-shadow: none;
+}
+body.shop .promise b, body.shop .promise-item b { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+body.shop .promise p, body.shop .promise-item p { color: #6e6e73; font-size: 14.5px; line-height: 1.6; }
+body.shop .chips .chip {
+  border: 0; background: #f5f5f7; color: #1d1d1f; border-radius: 980px; padding: 8px 18px; font-size: 14px;
+}
+body.shop .chips .chip.on { background: #1d1d1f; color: #fff; }
+
+/* 商品卡：苹果商店式——图大、字少、价格退后 */
+body.shop .pcard {
+  border: 0; background: #fff; border-radius: 22px; overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06); transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s;
+}
+body.shop .pcard:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.10); }
+body.shop .pcard .thumb { aspect-ratio: 1 / 1; background: #f5f5f7; border: 0; color: #86868b; font-size: 40px; font-weight: 600; }
+body.shop .pcard .thumb::after { content: none; }
+body.shop .pcard .nm { font-size: 16px; font-weight: 600; letter-spacing: -.02em; margin: 14px 0 4px; }
+body.shop .pcard .dim { font-size: 13px; color: #86868b; }
+body.shop .pcard .price { font-size: 17px; font-weight: 600; color: #1d1d1f; margin-top: 6px; }
+body.shop .pcard .btn, body.shop .pcard button {
+  border-radius: 980px; padding: 8px 16px; font-size: 13.5px; font-weight: 500;
+}
+body.shop .pcard .btn-primary, body.shop .pcard .primary { background: #0071e3; border-color: #0071e3; }
+
+/* 通用按钮：苹果式圆角胶囊 + 蓝色主按钮 */
+body.shop .btn-primary, body.shop .primary, body.shop #addBtn, body.shop #submitOrder, body.shop #doLogin {
+  background: #0071e3; border-color: #0071e3; border-radius: 980px; font-weight: 500;
+}
+body.shop .btn-primary:hover, body.shop .primary:hover, body.shop #addBtn:hover { background: #0077ed; }
+body.shop button:not(.primary):not(.btn-primary):not(.chip), body.shop .btn, body.shop .ghost, body.shop .btn-ghost {
+  border-radius: 980px; border-color: #d2d2d7; color: #1d1d1f; font-weight: 500;
+}
+body.shop a { color: #0066cc; }
+body.shop .panel { border: 0; border-radius: 20px; background: #fbfbfd; box-shadow: none; padding: 28px; }
+
+/* 悬浮购物车抽屉 / Toast：苹果式细磨砂 */
+body.shop .drawer { background: rgba(255,255,255,.86); backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px); border-left: 1px solid rgba(0,0,0,.06); border-radius: 0; }
+body.shop .toast { background: rgba(29,29,31,.92); color: #fff; border: 0; border-radius: 980px; backdrop-filter: blur(12px); }
+
+@media (max-width: 640px) {
+  body.shop .shop-main > * + * { margin-top: 64px; }
+  body.shop .hero { padding-top: 56px; }
+  body.shop .stats, body.shop .metrics { gap: 26px; }
+}
