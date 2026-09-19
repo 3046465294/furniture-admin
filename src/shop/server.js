@@ -501,6 +501,7 @@ if (ORDER_TIMEOUT_MIN > 0) {
 
 // 启动即做一次幂等迁移（老商品补默认规格、老购物车挂到默认规格）
 const migrated = ensureSkus();
+setInterval(() => { try { const r = ensureSkus(); if (r.created) console.log('[sku] patrol: filled default skus for ' + r.created + ' products'); } catch (e) {} }, 60000).unref?.();
 const tplCount = ensureShippingTemplates();
 
 server.listen(PORT, HOST, () => {
