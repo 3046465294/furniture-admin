@@ -99,6 +99,59 @@ create table if not exists reviews (
 create index if not exists idx_review_product on reviews(product_id);
 `);
 
+// ── 商品域：SPU(商品) → SKU(规格) + 商品图 ──
+db.exec(`
+create table if not exists product_skus (
+  id          integer primary key autoincrement,
+  product_id  integer not null references products(id),
+  spec        text not null default '默认',
+  specs_json  text not null default '{}',
+  sku_code    text default '',
+  price_cents integer not null default 0,
+  stock       integer not null default 0,
+  status      integer not null default 1,
+  created_at  text, updated_at text,
+  unique(product_id, spec)
+);
+create index if not exists idx_sku_product on product_skus(product_id);
+create table if not exists product_images (
+  id         integer primary key autoincrement,
+  product_id integer not null references products(id),
+  url        text not null,
+  sort       integer not null default 0,
+  is_primary integer not null default 0,
+  created_at text
+);
+create index if not exists idx_img_product on product_images(product_id);
+`);
+
+// 购物车项支持 SKU（老库没有该列时补上，向后兼容）
+try { db.exec('alter table cart_items add column sku_id integer'); } catch { /* 已存在 */ }
+
+/** 幂等迁移：为没有规格的商品生成「默认」SKU，并把老购物车项挂到默认 SKU 上 */
+export function ensureSkus() {
+  const noSku = db.prepare('select p.* from products p where p.deleted = 0 and not exists (select 1 from product_skus s where s.product_id = p.id)').all();
+  const ins = db.prepare('insert into product_skus(product_id, spec, specs_json, sku_code, price_cents, stock, status, created_at, updated_at) values (?,?,?,?,?,?,1,?,?)');
+  for (const p of noSku) ins.run(p.id, '默认', '{}', p.sku || '', p.price_cents, p.stock, now(), now());
+  const fixed = db.prepare('update cart_items set sku_id = (select id from product_skus s where s.product_id = cart_items.product_id order by s.id limit 1) where sku_id is null').run().changes;
+  return { created: noSku.length, cartsFixed: fixed };
+}
+
+/** 某商品的全部规格 */
+export function skusOf(productId) {
+  return db.prepare('select * from product_skus where product_id = ? and status = 1 order by id').all(productId);
+}
+/** 商品图（主图在前） */
+export function imagesOf(productId) {
+  return db.prepare('select url, is_primary from product_images where product_id = ? order by is_primary desc, sort, id').all(productId);
+}
+/** 库存聚合：products.stock 保持为各 SKU 之和（后台与告警沿用这个口径） */
+export function syncProductStock(productId) {
+  const s = db.prepare('select coalesce(sum(stock),0) total from product_skus where product_id = ? and status = 1').get(productId).total;
+  db.prepare('update products set stock = ?, updated_at = ? where id = ?').run(s, now(), productId);
+  return s;
+}
+
 export const ORDER_STATUS = { pending: '待付款', paid: '已付款', shipped: '已发货', done: '已完成', cancelled: '已取消' };
 /** 状态机：前台只能做「支付」和「取消」，发货/完成由后台操作 */
 export const ORDER_FLOW = { pending: ['paid', 'cancelled'], paid: ['shipped', 'cancelled'], shipped: ['done'], done: [], cancelled: [] };
@@ -116,9 +169,13 @@ export function cartOf(userId) {
 /** 购物车内容（联商品，过滤已删除/下架） */
 export function cartItems(cartId) {
   return db.prepare(`
-    select ci.id, ci.qty, p.id as product_id, p.sku, p.name, p.price_cents, p.stock, p.status,
-           (p.price_cents * ci.qty) as subtotal_cents
+    select ci.id, ci.qty, ci.sku_id, p.id as product_id, p.sku, p.name, p.status,
+           coalesce(s.price_cents, p.price_cents) as price_cents,
+           coalesce(s.stock, p.stock) as stock,
+           coalesce(s.spec, '默认') as spec,
+           (coalesce(s.price_cents, p.price_cents) * ci.qty) as subtotal_cents
     from cart_items ci join products p on p.id = ci.product_id
+    left join product_skus s on s.id = ci.sku_id
     where ci.cart_id = ? and p.deleted = 0
     order by ci.id desc
   `).all(cartId);

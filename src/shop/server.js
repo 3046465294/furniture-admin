@@ -21,6 +21,7 @@ import {
 import { recordRequest, snapshot, prometheusText } from '../metrics.js';
 import {
   cartOf, cartItems, moveStock, ORDER_STATUS, ORDER_FLOW, now,
+  ensureSkus, skusOf, imagesOf, syncProductStock,
 } from './schema.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -126,10 +127,14 @@ route('GET', '/api/shop/products/:id', async ({ res, params }) => {
   const p = productById(int(params.id, 1, 1e15, 0));
   if (!p || p.status !== 1) return json(res, 404, { error: '商品不存在或已下架' });
   const reviews = db.prepare('select r.rating, r.content, r.created_at, u.username from reviews r join users u on u.id = r.user_id where r.product_id = ? order by r.id desc limit 20').all(p.id);
+  const skus = skusOf(p.id).map((k) => ({ id: k.id, spec: k.spec, specs: JSON.parse(k.specs_json || '{}'), skuCode: k.sku_code, price: k.price_cents / 100, priceCents: k.price_cents, stock: k.stock }));
+  const images = imagesOf(p.id).map((i) => i.url);
   return json(res, 200, {
     product: { id: p.id, sku: p.sku, name: p.name, price: p.price_cents / 100, priceCents: p.price_cents, stock: p.stock,
       description: p.description, category: p.category, categoryId: p.category_id, sold: p.sold, rating: p.rating, reviewCount: p.review_count },
     reviews,
+    skus,
+    images,
   });
 });
 
@@ -192,12 +197,16 @@ route('POST', '/api/shop/cart', async (ctx) => {
   const qty = int(ctx.body.qty, 1, 99, 1);
   const p = productById(pid);
   if (!p || p.status !== 1) return json(ctx.res, 404, { error: '商品不存在或已下架' });
+  // 规格：没传 skuId 就用该商品的第一个规格（默认规格），保证老前端也能用
+  const skuList = skusOf(pid);
+  const sku = ctx.body.skuId ? skuList.find((k) => k.id === int(ctx.body.skuId, 1, 1e15, 0)) : skuList[0];
+  if (!sku) return json(ctx.res, 409, { error: "该商品暂无可售规格" });
   const cartId = cartOf(c.id);
-  const exist = db.prepare('select * from cart_items where cart_id = ? and product_id = ?').get(cartId, pid);
+  const exist = db.prepare('select * from cart_items where cart_id = ? and product_id = ? and (sku_id is ? or sku_id = ?)').get(cartId, pid, sku.id, sku.id);
   const want = (exist?.qty ?? 0) + qty;
-  if (want > p.stock) return json(ctx.res, 409, { error: `库存不足（剩 ${p.stock} 件）` });
+  if (want > sku.stock) return json(ctx.res, 409, { error: `「${sku.spec}」库存不足（剩 ${sku.stock} 件）` });
   if (exist) db.prepare('update cart_items set qty = ? where id = ?').run(want, exist.id);
-  else db.prepare('insert into cart_items(cart_id, product_id, qty, added_at) values (?,?,?,?)').run(cartId, pid, qty, now());
+  else db.prepare('insert into cart_items(cart_id, product_id, sku_id, qty, added_at) values (?,?,?,?,?)').run(cartId, pid, sku.id, qty, now());
   return json(ctx.res, 200, cartPayload(c.id));
 });
 route('PUT', '/api/shop/cart/:id', async (ctx) => {
@@ -265,8 +274,12 @@ route('POST', '/api/shop/checkout', async (ctx) => {
     const orderId = Number(r.lastInsertRowid);
     const insItem = db.prepare('insert into order_items(order_id, product_id, sku, name, price_cents, qty, subtotal_cents) values (?,?,?,?,?,?,?)');
     for (const i of items) {
-      insItem.run(orderId, i.product_id, i.sku, i.name, i.price_cents, i.qty, i.subtotal_cents);
+      // 订单明细记录「商品 + 规格」，并优先扣 SKU 库存，最后同步商品级库存（各 SKU 之和）
+      const lineName = i.spec && i.spec !== '默认' ? i.name + '（' + i.spec + '）' : i.name;
+      insItem.run(orderId, i.product_id, i.sku, lineName, i.price_cents, i.qty, i.subtotal_cents);
+      if (i.sku_id) db.prepare('update product_skus set stock = stock - ?, updated_at = ? where id = ?').run(i.qty, now(), i.sku_id);
       moveStock(i.product_id, -i.qty, '下单扣减', orderNo);
+      syncProductStock(i.product_id);
     }
     db.prepare('insert into payments(order_id, channel, amount_cents, status, created_at) values (?,?,?,?,?)').run(orderId, 'mock', totalCents, 'pending', now());
     db.prepare('delete from cart_items where cart_id = ?').run(cartOf(c.id));
@@ -405,8 +418,13 @@ const server = createServer(async (req, res) => {
     recordRequest({ method: req.method, path: pathname, status: err?.status ?? 500, ms: Date.now() - t0, note: '异常' });
   }
 });
+// 启动即做一次幂等迁移（老商品补默认规格、老购物车挂到默认规格）
+const migrated = ensureSkus();
+
 server.listen(PORT, HOST, () => {
   console.log(`[AURUM 商城前台 v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
   console.log(`  顾客侧：浏览/搜索/购物车/下单/我的订单   监控：/api/shop/metrics.prom`);
+  if (migrated.created) console.log(`  [迁移] 为 ${migrated.created} 个商品补了默认规格，修正 ${migrated.cartsFixed} 条购物车记录`);
+  console.log(`  规格(SKU)：${db.prepare('select count(*) c from product_skus').get().c} 条 · 商品图：${db.prepare('select count(*) c from product_images').get().c} 张`);
 });
 export { server };
