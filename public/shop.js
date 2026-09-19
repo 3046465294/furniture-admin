@@ -23,6 +23,8 @@ function toast(msg) {
   document.querySelectorAll('.toast').forEach((t) => t.remove());
   const el = document.createElement('div');
   el.className = 'toast'; el.textContent = msg;
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2600);
 }
@@ -186,6 +188,8 @@ async function viewProduct(id) {
     return Math.max(1, Math.min(99, Number.isFinite(n) ? n : 1));
   };
   const qty = () => Math.max(1, Math.min(maxQtyOf(), Number($('qtyIn').value) || 1));
+  // 无障碍：给加减按钮有效标签（仅"−"/"＋"对读屏是无意义信息）
+  main.querySelectorAll('[data-q]').forEach((b) => b.setAttribute('aria-label', Number(b.dataset.q) > 0 ? '增加数量' : '减少数量'));
   const syncQtyLimit = () => { $('qtyIn').value = qty(); $('qtyHint').textContent = '最多 ' + maxQtyOf() + ' 件'; };
   main.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => {
     $('qtyIn').value = Math.max(1, Math.min(maxQtyOf(), qty() + Number(b.dataset.q)));
@@ -219,10 +223,11 @@ async function viewProduct(id) {
       if ($('qtyHint')) { $('qtyIn').value = Math.max(1, Math.min(Number(b.dataset.stock) || 1, Number($('qtyIn').value) || 1)); syncQtyLimit(); }
       $('buyNow').disabled = out;
     };
+    skuBox.querySelectorAll('[data-sku]').forEach((x, i) => x.setAttribute('aria-pressed', String(i === 0)));
     skuBox.addEventListener('click', (e) => {
       const b = e.target.closest('[data-sku]');
       if (!b) return;
-      skuBox.querySelectorAll('[data-sku]').forEach((x) => x.classList.toggle('on', x === b));
+      skuBox.querySelectorAll('[data-sku]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
       syncSku();
     });
     syncSku();
@@ -274,10 +279,17 @@ function renderCartDrawer() {
     renderCartBadge(); renderCartDrawer(); if (location.hash.startsWith('#/cart')) viewCart();
   }));
 }
-const openDrawer = () => { $('drawer').hidden = false; $('scrim').hidden = false; };
+const openDrawer = () => {
+  $('drawer').hidden = false; $('scrim').hidden = false;
+  $('drawerClose')?.focus();                       // 无障碍：打开对话框后把焦点移进去
+};
 const closeDrawer = () => { $('drawer').hidden = true; $('scrim').hidden = true; };
 $('drawerClose').addEventListener('click', closeDrawer);
 $('scrim').addEventListener('click', closeDrawer);
+// Esc 关闭对话框（无障碍基本要求）
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('drawer').hidden) { closeDrawer(); $('navAccount')?.focus(); }
+});
 $('toCheckout').addEventListener('click', () => { closeDrawer(); location.hash = '#/cart'; });
 
 async function viewCart() {
@@ -588,7 +600,11 @@ async function viewAccount(hint) {
 function markNav(hash) {
   const map = { '#/': 0, '#/list': 1, '#/cart': 2, '#/orders': 3, '#/account': 4 };
   const key = hash.split('?')[0];
-  document.querySelectorAll('#topNav .navbtn').forEach((a, i) => a.classList.toggle('on', map[key] === i));
+  document.querySelectorAll('#topNav .navbtn').forEach((a, i) => {
+    const on = map[key] === i;
+    a.classList.toggle('on', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
 }
 /** 骨架屏：每次视图切换先占位，数据回来再替换（比"正在加载…"体面，也避免布局跳动） */
 function skeleton(kind) {

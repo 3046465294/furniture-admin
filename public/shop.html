@@ -6,7 +6,7 @@
 <title>AURUM 家居商城</title>
 <meta name="description" content="AURUM 家居商城 —— 沙发、床类、餐桌椅、衣柜、储物收纳与户外家具。">
 <link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/shop.css?v=1.6.0">
+<link rel="stylesheet" href="/shop.css?v=1.6.1">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0c0a07">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,6 +14,8 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f7cd7c'/><text x='16' y='23' font-size='19' text-anchor='middle' font-family='system-ui' fill='%232a1c07'>A</text></svg>">
 </head>
 <body class="shop">
+<!-- 无障碍：键盘用户可直接跳到主内容 -->
+<a class="skip-link" href="#main">跳到主内容</a>
 
 <!-- 顶栏：品牌 + 搜索 + 导航（导航为悬浮玻璃条，选中项有液态指示器） -->
 <header class="shop-head">
@@ -25,7 +27,7 @@
     <input id="q" placeholder="搜索商品名称或 SKU" autocomplete="off" aria-label="搜索商品">
     <button type="submit" class="btn-primary">搜索</button>
   </form>
-  <nav class="shop-nav" id="topNav">
+  <nav class="shop-nav" id="topNav" aria-label="主导航">
     <a class="navbtn" href="#/">首页</a>
     <a class="navbtn" href="#/list">全部商品</a>
     <a class="navbtn" href="#/cart">购物车 <span class="badge-n" id="cartN" hidden>0</span></a>
@@ -34,7 +36,7 @@
   </nav>
 </header>
 
-<main id="main" class="shop-main" aria-live="polite">
+<main id="main" class="shop-main" tabindex="-1" aria-live="polite">
     <!-- 骨架屏：脚本接管前的首屏占位（避免白屏与"正在加载…"这种廉价观感） -->
     <div class="skel-wrap">
       <div class="skel skel-title"></div>
@@ -52,7 +54,7 @@
 </footer>
 
 <!-- 购物车抽屉 -->
-<aside class="drawer" id="drawer" hidden aria-label="购物车">
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-label="购物车">
   <div class="drawer-head"><b>购物车</b><button class="btn-ghost" id="drawerClose">关闭</button></div>
   <div class="drawer-body" id="drawerBody"></div>
   <div class="drawer-foot">
@@ -62,6 +64,6 @@
 </aside>
 <div class="scrim" id="scrim" hidden></div>
 
-<script src="/shop.js?v=1.6.0" type="module"></script>
+<script src="/shop.js?v=1.6.1" type="module"></script>
 </body>
 </html>

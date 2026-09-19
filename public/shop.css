@@ -170,3 +170,13 @@ button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed;
 .tl-step.cur .tl-label { color: var(--gold-2); font-weight: 600; }
 .tl-step.off .tl-dot { background: rgba(255,255,255,.10); }
 .tl-step.done::before { background: linear-gradient(90deg, var(--gold-3), rgba(255,244,216,.14)); }
+/* ── 无障碍 ── */
+.skip-link { position: absolute; left: -9999px; top: 8px; z-index: 100; padding: 10px 16px; border-radius: 10px; background: var(--gold-2); color: #2a1c07; font-weight: 600; text-decoration: none; }
+.skip-link:focus { left: 12px; }
+/* 鼠标点击不显示焦点环，键盘操作必显示（这是可访问性与视觉美观的平衡点） */
+:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; border-radius: 8px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; }
+main:focus { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
