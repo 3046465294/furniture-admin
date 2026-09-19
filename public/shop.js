@@ -494,6 +494,18 @@ async function viewOrderDetail(orderNo) {
       <div class="row-between"><h2 style="font-size:19px;margin:0">订单 ${esc(o.orderNo)} <span class="badge ${STATUS_TONE[o.status] ?? ''}">${esc(o.statusText)}</span></h2>
         <span class="dim">下单时间 ${esc(o.createdAt)}</span></div>
       <hr class="hr">
+      <div class="timeline">
+        ${[['pending', '提交订单'], ['paid', '完成支付'], ['shipped', '商家发货'], ['done', '确认收货']].map(([k, label]) => {
+          const seq = ['pending', 'paid', 'shipped', 'done'];
+          const cur = seq.indexOf(o.status);
+          const idx = seq.indexOf(k);
+          const st = o.status === 'cancelled' ? 'off' : (idx < cur ? 'done' : idx === cur ? 'cur' : 'todo');
+          return `<div class="tl-step ${st}"><span class="tl-dot"></span><span class="tl-label">${label}</span></div>`;
+        }).join('')}
+      </div>
+      ${o.status === 'cancelled' ? '<p class="muted" style="margin:-4px 0 14px">该订单已取消（已按规格回补库存）</p>' : ''}
+      ${(o.shipment && (o.shipment.carrier || o.shipment.trackingNo)) || o.trackingNo ? `<p class="muted" style="margin:-4px 0 14px">物流：${esc(o.shipment?.carrier ?? '')} ${esc(o.shipment?.trackingNo ?? o.trackingNo ?? '')}</p>` : ''}
+      <hr class="hr">
       ${items.map((i) => `<div class="citem"><div class="mini">${initial(i.name)}</div>
         <div><div class="nm">${esc(i.name)}</div><div class="dim">SKU ${esc(i.sku)} · ${money(i.price)} × ${i.qty}</div></div>
         <div class="sub">${money(i.subtotal)}</div></div>`).join('')}
