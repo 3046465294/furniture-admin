@@ -337,3 +337,29 @@ body.shop .drawer .mini {
 }
 body.shop .mini [class*="grad"],
 body.shop .thumb [class*="grad"] { background: none !important; }
+
+/* ── 第五轮：清掉剩余的全部金色/深色规则（按 grep 结果逐个覆盖）── */
+body.shop .detail .big {
+  background: #f1f5f9; background-image: none;
+  color: #0369a1; border: 1px solid #e2e8f0; border-radius: 12px;
+}
+body.shop .chip.on,
+body.shop button.chip.on {
+  background: #0369a1; background-image: none; color: #ffffff; border-color: #0369a1;
+}
+body.shop .badge-n {
+  background: #0369a1; background-image: none; color: #ffffff;
+}
+body.shop .thumb.on {
+  border-color: #0369a1; box-shadow: 0 0 0 3px rgba(3, 105, 161, .15);
+}
+body.shop .promise-item {
+  background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid #e2e8f0; border-radius: 10px;
+}
+body.shop .pcard .thumb::after { content: none; }          /* 去掉旧的金色扫光 */
+body.shop .pcard { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.shop .panel { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+body.shop .drawer { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.shop .toast { background: #111827; background-image: none; color: #ffffff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #111827; }
+body.shop .report, body.shop .notice, body.shop [class*="glass"] { background: #ffffff; background-image: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
