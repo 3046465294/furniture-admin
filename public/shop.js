@@ -165,7 +165,8 @@ async function viewProduct(id) {
           <dt>描述</dt><dd>${esc(p.description || '—')}</dd>
         </dl>
         <div class="row" style="margin:16px 0">
-          <div class="qty"><button data-q="-1">−</button><input id="qtyIn" value="1" inputmode="numeric"><button data-q="1">＋</button></div>
+          <div class="qty"><button data-q="-1">−</button><input id="qtyIn" value="1" inputmode="numeric" aria-label="购买数量"><button data-q="1">＋</button></div>
+          <span class="muted" id="qtyHint"></span>
           <button class="btn-primary" id="addBtn" ${p.stock <= 0 ? 'disabled' : ''}>加入购物车</button>
           <button class="btn-ghost" id="buyNow" ${p.stock <= 0 ? 'disabled' : ''}>立即购买</button>
         </div>
@@ -178,9 +179,17 @@ async function viewProduct(id) {
           : '<p class="muted">还没有评价 —— 购买后可在「我的订单」里评价。</p>'}
       </div>
     </div>`;
-  const qty = () => Math.max(1, Math.min(99, Number($('qtyIn').value) || 1));
+  // 数量上限 = 当前所选规格的库存（选规格前用商品级库存兜底）
+  const maxQtyOf = () => {
+    const b = document.querySelector('#skuBox [data-sku].on');
+    const n = b ? Number(b.dataset.stock) : Number(p.stock);
+    return Math.max(1, Math.min(99, Number.isFinite(n) ? n : 1));
+  };
+  const qty = () => Math.max(1, Math.min(maxQtyOf(), Number($('qtyIn').value) || 1));
+  const syncQtyLimit = () => { $('qtyIn').value = qty(); $('qtyHint').textContent = '最多 ' + maxQtyOf() + ' 件'; };
   main.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => {
-    $('qtyIn').value = Math.max(1, Math.min(99, qty() + Number(b.dataset.q)));
+    $('qtyIn').value = Math.max(1, Math.min(maxQtyOf(), qty() + Number(b.dataset.q)));
+    $('qtyHint').textContent = '最多 ' + maxQtyOf() + ' 件';
   }));
   // 规格选择：切换后联动价格、库存、SKU 编码；缺货自动禁用加购
   // 图画廊：点缩略图切换主图
@@ -207,6 +216,7 @@ async function viewProduct(id) {
       meta.textContent = 'SKU ' + (b.dataset.code || '—');
       const out = Number(b.dataset.stock) <= 0;
       $('addBtn').disabled = out;
+      if ($('qtyHint')) { $('qtyIn').value = Math.max(1, Math.min(Number(b.dataset.stock) || 1, Number($('qtyIn').value) || 1)); syncQtyLimit(); }
       $('buyNow').disabled = out;
     };
     skuBox.addEventListener('click', (e) => {
@@ -429,14 +439,23 @@ async function viewOrderDetail(orderNo) {
     </div>`;
   $('dPay')?.addEventListener('click', async () => { try { await api(`/api/shop/orders/${o.id}/pay`, { method: 'POST' }); toast('支付成功（模拟）'); viewOrderDetail(orderNo); } catch (e) { toast(e.message); } });
   $('dCancel')?.addEventListener('click', async () => { try { await api(`/api/shop/orders/${o.id}/cancel`, { method: 'POST' }); toast('已取消'); viewOrderDetail(orderNo); } catch (e) { toast(e.message); } });
+  // 评价：订单明细里的 SKU 是商品编码 → 用搜索接口反查商品 id → 提交评价
   $('dReview')?.addEventListener('click', async () => {
-    const first = items[0];
-    const rating = Number(prompt('给这件商品打分（1-5）', '5') || 5);
-    const content = prompt('写点评价（可留空）', '') ?? '';
+    const btn = $('dReview');
+    btn.disabled = true; btn.textContent = '提交中…';
     try {
-      const prod = await api('/api/shop/products/' + (await api('/api/shop/orders/' + encodeURIComponent(orderNo))).items.length ? 0 : 0).catch(() => null);
-      toast('已提交评价');
-    } catch (e) { toast(e.message); }
+      for (const it of items) {
+        const found = await api('/api/shop/products?q=' + encodeURIComponent(it.sku));
+        const target = found.rows && found.rows[0];
+        if (!target) { toast('找不到商品 ' + it.sku + '，跳过'); continue }
+        const rating = Number(prompt('给「' + it.name + '」打分（1-5）', '5') || 5);
+        if (!Number.isFinite(rating) || rating < 1) continue;
+        const content = prompt('写点评价（可留空）', '') ?? '';
+        await api('/api/shop/reviews', { method: 'POST', body: { productId: target.id, orderId: o.id, rating: Math.min(5, Math.max(1, rating)), content } });
+        toast('已提交「' + it.name + '」的评价');
+      }
+      viewOrderDetail(orderNo);
+    } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '评价商品'; }
   });
 }
 
