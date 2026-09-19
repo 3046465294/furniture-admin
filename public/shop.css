@@ -107,3 +107,9 @@ body.shop, body.admin { margin: 0; }
   .shop-nav { width: 100%; justify-content: space-between; }
   .shop-nav .navbtn { padding: 8px 9px; font-size: 12.5px; }
 }
+
+/* 规格按钮：复用 chip 外观，但作为按钮要有可点状态与选中态 */
+button.chip { font: inherit; cursor: pointer; }
+button.chip.on { color: #2a1c07; font-weight: 600; background: linear-gradient(135deg, var(--gold-1), var(--gold-3)); border-color: transparent; }
+button.chip[disabled], button.chip:disabled { opacity: .45; cursor: not-allowed; }
+#skuMeta { font-size: 12.5px; }

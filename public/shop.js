@@ -124,7 +124,12 @@ async function viewProduct(id) {
           <span class="dim">SKU ${esc(p.sku)}</span><span class="dim">已售 ${p.sold}</span>
           ${p.rating > 0 ? `<span class="dim">★ ${p.rating}（${p.reviewCount} 条评价）</span>` : '<span class="dim">暂无评价</span>'}
         </div>
-        <div class="price-lg">${money(p.price)}</div>
+        <div class="price-lg" id="skuPrice">${money(p.price)}</div>
+        ${p.skus && p.skus.length > 1 ? `<div class="row" id="skuBox" style="margin:14px 0;gap:8px;flex-wrap:wrap">
+          <span class="dim">规格</span>
+          ${p.skus.map((k, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-sku="${k.id}" data-price="${k.priceCents}" data-stock="${k.stock}" data-code="${esc(k.skuCode || '')}">${esc(k.spec)}${k.stock <= 0 ? '（缺货）' : ''}</button>`).join('')}
+          <span class="muted" id="skuMeta"></span>
+        </div>` : ''}
         <dl>
           <dt>分类</dt><dd>${esc(p.category ?? '未分类')}</dd>
           <dt>库存</dt><dd>${p.stock > 0 ? p.stock + ' 件' : '<span style="color:var(--err)">已售罄</span>'}</dd>
@@ -148,16 +153,39 @@ async function viewProduct(id) {
   main.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => {
     $('qtyIn').value = Math.max(1, Math.min(99, qty() + Number(b.dataset.q)));
   }));
-  $('addBtn').addEventListener('click', async () => { await addToCart(p.id, qty()); });
+  // 规格选择：切换后联动价格、库存、SKU 编码；缺货自动禁用加购
+  let chosenSku = p.skus && p.skus.length ? p.skus[0].id : null;
+  const skuBox = $('skuBox');
+  if (skuBox) {
+    const meta = $('skuMeta');
+    const syncSku = () => {
+      const b = skuBox.querySelector('[data-sku].on');
+      if (!b) return;
+      chosenSku = Number(b.dataset.sku);
+      $('skuPrice').innerHTML = money(Number(b.dataset.price) / 100) + '<small>库存 ' + b.dataset.stock + '</small>';
+      meta.textContent = 'SKU ' + (b.dataset.code || '—');
+      const out = Number(b.dataset.stock) <= 0;
+      $('addBtn').disabled = out;
+      $('buyNow').disabled = out;
+    };
+    skuBox.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sku]');
+      if (!b) return;
+      skuBox.querySelectorAll('[data-sku]').forEach((x) => x.classList.toggle('on', x === b));
+      syncSku();
+    });
+    syncSku();
+  }
+  $('addBtn').addEventListener('click', async () => { await addToCart(p.id, qty(), false, chosenSku); });
   $('buyNow').addEventListener('click', async () => {
-    if (await addToCart(p.id, qty(), true)) location.hash = '#/cart';
+    if (await addToCart(p.id, qty(), true, chosenSku)) location.hash = '#/cart';
   });
 }
 
-async function addToCart(productId, qty, silent) {
+async function addToCart(productId, qty, silent, skuId) {
   if (!state.user) { toast('请先登录后再加购'); location.hash = '#/account'; return false; }
   try {
-    state.cart = await api('/api/shop/cart', { method: 'POST', body: { productId, qty } });
+    state.cart = await api('/api/shop/cart', { method: 'POST', body: skuId ? { productId, skuId, qty } : { productId, qty } });
     renderCartBadge(); renderCartDrawer();
     if (!silent) { toast('已加入购物车'); openDrawer(); }
     return true;
