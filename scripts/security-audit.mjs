@@ -90,6 +90,8 @@ if (viewerCookie) {
 }
 
 console.log('\n【4】路径穿越与敏感文件暴露（应 404）')
+// 判定标准：404/400 为拦截；200 时看内容里有没有源码/数据库特征（SPA 首页属正常）
+const looksLeaked = (r) => /SQLite format|export function|createHmac|node:sqlite|repositoryformatversion/.test(r.text)
 for (const [base, path, label] of [
   [A, '/../src/auth.js', '后台-源码'],
   [A, '/..%2f..%2fdata%2ffurniture.db', '后台-数据库文件'],
