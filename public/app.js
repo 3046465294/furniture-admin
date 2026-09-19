@@ -265,7 +265,7 @@ async function loadOrders() {
     <tr><td>${esc(o.orderNo)}</td><td>${esc(o.customer)}</td><td>${esc(o.phone)}</td>
     <td class="num">¥${o.total.toFixed(2)}</td><td class="num">${o.itemCount}</td>
     <td><span class="badge ${o.status === 'done' ? 'ok' : o.status === 'cancelled' ? 'off' : 'warn'}">${ORDER_STATUS[o.status] ?? o.status}</span>
-      <span class="tools" style="margin-left:8px">${(ORDER_FLOW[o.status] ?? []).map((s) => `<button data-ost="${o.id}:${s}" title="流转到「${ORDER_STATUS[s]}」">→ ${ORDER_STATUS[s]}</button>`).join('') || '<span class="dim">—</span>'}</span></td>
+      <span class="tools" style="margin-left:8px">${state.user?.role === 'viewer' ? '' : ((ORDER_FLOW[o.status] ?? []).map((s) => `<button data-ost="${o.id}:${s}" title="流转到「${ORDER_STATUS[s]}」">→ ${ORDER_STATUS[s]}</button>`).join('') || '<span class="dim">—</span>')}</span></td>
     <td class="dim">${esc(o.createdAt)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">暂无订单</td></tr>';
   $('oInfo').textContent = `共 ${r.total} 条`;
 }
@@ -300,6 +300,8 @@ const fmtUptime = (s) => s < 60 ? s + ' 秒' : s < 3600 ? Math.floor(s / 60) + '
   const nav = document.querySelector('.topbar nav');
   const app = document.getElementById('app');
   if (!nav || !app) return;
+  // 按角色降级：只读/运营账号不该看到自己点进去只会 403 的入口
+  if (state.user?.role !== 'admin') return;
 
   const btn = document.createElement('button');
   btn.className = 'navbtn'; btn.dataset.view = 'adminpanel'; btn.textContent = '用户与告警';
