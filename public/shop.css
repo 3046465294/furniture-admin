@@ -481,3 +481,11 @@ body.shop .toast { background: rgba(29,29,31,.92); color: #fff; border: 0; borde
   body.shop .hero { padding-top: 56px; }
   body.shop .stats, body.shop .metrics { gap: 26px; }
 }
+
+/* ── 修首页观感：纯白底 · 收紧 Hero 与首屏间距 ── */
+body.shop { background: #ffffff !important; background-image: none !important; }
+body.shop .shop-main { padding-top: 8px; }
+body.shop .hero { padding: 64px 0 8px; }
+body.shop .hero p { margin-bottom: 22px; color: #6e6e73; }
+body.shop .shop-main > * + * { margin-top: 72px; }
+body.shop .promise { margin-top: 40px; }

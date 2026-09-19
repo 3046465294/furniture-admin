@@ -62,18 +62,12 @@ async function viewHome() {
     <section class="hero">
       <div class="hero-badge">AURUM · 家居商城</div>
       <h1>把一件家具，安放进你的生活</h1>
-      <p>沙发 · 床类 · 餐桌椅 · 衣柜 · 储物收纳 · 户外家具。从浏览到签收的完整链路：选规格 → 加购 → 结算 → 生成订单 → 支付 → 发货 → 完成。</p>
+      <p>挑选家具，不必来回比价。</p>
       <div class="row" style="gap:10px;margin:18px 0 8px">
         <a class="btn primary" href="#/list">开始选购</a>
         <a class="btn ghost" href="#/orders">我的订单</a>
       </div>
-      <div class="hero-stats">
-        <span><b>${stats.products}</b>件在售</span>
-        <span><b>${cats.rows.length}</b>个分类</span>
-        <span><b>${stats.orders}</b>笔订单</span>
-        <span><b>0</b>第三方依赖</span>
-      </div>
-    </section>
+      </section>
     <div class="promise">
       ${promises.map((p) => `<div class="promise-item"><b>${esc(p.t)}</b><span>${esc(p.d)}</span></div>`).join('')}
     </div>
@@ -721,7 +715,7 @@ window.addEventListener('hashchange', route);
 // ────────── PWA：注册 Service Worker（离线壳 + 资源预缓存）──────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=2.0.0', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js?v=2.0.2', { scope: '/' })
       .then((reg) => { window.__faSW = reg.scope; })
       .catch((e) => { console.warn('Service Worker 注册失败（不影响使用）:', e.message); });
   });
