@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="客厅电视边柜 1.8m 示意图 2">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="意式极简真皮沙发（四人位） 示意图 2">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#1e2420"/><stop offset="0.55" stop-color="#31584a"/><stop offset="1" stop-color="#1e2420"/>
@@ -11,8 +11,8 @@
   </defs>
   <rect width="800" height="800" fill="url(#g)"/>
   <rect width="800" height="800" fill="url(#sh)"/>
-  <text x="400" y="360" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="260" font-weight="700" fill="#9fe8cf" opacity="0.92">客</text>
-  <text x="400" y="470" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="40" fill="#ffffff" opacity="0.92">客厅电视边柜 1.8m</text>
-  <text x="400" y="530" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="26" fill="#ffffff" opacity="0.6">储物收纳 · 视图 2/3 · 示意图（非实拍）</text>
+  <text x="400" y="360" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="260" font-weight="700" fill="#9fe8cf" opacity="0.92">意</text>
+  <text x="400" y="470" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="40" fill="#ffffff" opacity="0.92">意式极简真皮沙发（四人位）</text>
+  <text x="400" y="530" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="26" fill="#ffffff" opacity="0.6">沙发 · 视图 2/3 · 示意图（非实拍）</text>
   <text x="400" y="740" text-anchor="middle" font-family="system-ui" font-size="22" fill="#ffffff" opacity="0.38">AURUM 家居商城 · 演示素材</text>
 </svg>

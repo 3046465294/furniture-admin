@@ -1,11 +1,11 @@
 /**
- * 生成商品图资源（SVG 占位图）
+ * 生成商品图资源（SVG 占位图）—— 幂等，可被巡检脚本重复调用
  *
  * 说明与取舍：
  *   · 真实电商的商品图是运营上传的实拍图；这里是作品演示，没有实拍图可用
  *   · 所以生成"明确标注为示意"的 SVG 占位图（渐变 + 商品名 + 视图序号），
  *     而不是拿网图冒充实拍 —— 不伪造素材是底线
- *   · 同时给若干商品补多图夹具，用于验证详情页图画廊
+ *   · 覆盖**所有在售商品**（每件 3 张），使演示重置清空 product_images 后能被巡检恢复
  */
 import { db, now } from '../src/db.js'
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -20,11 +20,11 @@ const PALETTES = [
   ['#1d232b', '#33506b', '#a8d4ff'],
 ]
 
-/** 一张"示意商品图"：渐变底 + 品类标签 + 商品名 + 视图序号 */
+/** 一张"示意商品图"：渐变底 + 首字 + 商品名 + 视图序号（明确标注非实拍） */
 function svg(name, cat, idx, total) {
   const [c1, c2, acc] = PALETTES[idx % PALETTES.length]
-  const safe = (s) => String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]))
-  const initial = safe(String(name).trim().slice(0, 1))
+  const safe = (s) => String(s ?? '').replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]))
+  const initial = safe(String(name || '?').trim().slice(0, 1))
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="${safe(name)} 示意图 ${idx + 1}">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -46,49 +46,35 @@ function svg(name, cat, idx, total) {
 `
 }
 
-// ① 为已有 product_images 行生成文件
-let made = 0
-const rows = db.prepare(`
-  select pi.url, pi.sort, p.name, c.name as cat
-  from product_images pi join products p on p.id = pi.product_id
-  left join categories c on c.id = p.category_id
-  order by pi.product_id, pi.sort`).all()
-const byProduct = new Map()
-for (const r of rows) {
-  const list = byProduct.get(r.url.replace(/-\d+\.svg$/, '')) ?? []
-  list.push(r); byProduct.set(r.url.replace(/-\d+\.svg$/, ''), list)
-}
-for (const [, list] of byProduct) {
-  list.forEach((r, i) => {
-    const file = DIR + r.url.split('/').pop()
-    if (!existsSync(file)) { writeFileSync(file, svg(r.name, r.cat, i, list.length), 'utf8'); made++ }
-  })
-}
+/** 为所有在售商品补齐 3 张图（幂等） */
+export function ensureProductImages() {
+  const products = db.prepare(`
+    select p.id, p.name, c.name as cat from products p
+    left join categories c on c.id = p.category_id
+    where p.deleted = 0 and p.status = 1
+    order by p.id
+  `).all()
 
-// ② 给前 4 个商品补多图夹具（每件 3 张），用于验证图画廊
-let fixture = 0
-const products = db.prepare('select p.id, p.name, c.name as cat from products p left join categories c on c.id = p.category_id where p.deleted = 0 order by p.id desc limit 4').all()
-for (const p of products) {
-  const has = db.prepare('select count(*) c from product_images where product_id = ?').get(p.id).c
-  if (has > 0) {
-    // 已有记录：按记录生成文件
-    const imgs = db.prepare('select url, sort from product_images where product_id = ? order by sort').all(p.id)
+  let addedRows = 0, addedFiles = 0
+  for (const p of products) {
+    let imgs = db.prepare('select url, sort from product_images where product_id = ? order by sort').all(p.id)
+    if (imgs.length === 0) {
+      for (let i = 1; i <= 3; i++) {
+        const url = `/img/p${p.id}-${i}.svg`
+        db.prepare('insert into product_images(product_id, url, sort, is_primary, created_at) values (?,?,?,?,?)')
+          .run(p.id, url, i, i === 1 ? 1 : 0, now())
+        addedRows++
+      }
+      imgs = db.prepare('select url, sort from product_images where product_id = ? order by sort').all(p.id)
+    }
     imgs.forEach((im, i) => {
-      const file = DIR + im.url.split('/').pop()
-      if (!existsSync(file)) { writeFileSync(file, svg(p.name, p.cat, i, imgs.length), 'utf8'); made++ }
+      const file = DIR + String(im.url).split('/').pop()
+      if (!existsSync(file)) { writeFileSync(file, svg(p.name, p.cat, i, imgs.length), 'utf8'); addedFiles++ }
     })
-    continue
   }
-  for (let i = 1; i <= 3; i++) {
-    const url = `/img/p${p.id}-${i}.svg`
-    db.prepare('insert into product_images(product_id, url, sort, is_primary, created_at) values (?,?,?,?,?)')
-      .run(p.id, url, i, i === 1 ? 1 : 0, now())
-    writeFileSync(DIR + url.split('/').pop(), svg(p.name, p.cat, i - 1, 3), 'utf8')
-    fixture++
-  }
+  return { products: products.length, addedRows, addedFiles }
 }
 
-console.log('  ✅ 生成/补齐商品图 ' + (made + fixture) + ' 张（已有记录 ' + made + ' + 新夹具 ' + fixture + '）')
-console.log('  ✅ 图片目录: ' + DIR)
-const total = db.prepare('select count(*) c from product_images').get().c
-console.log('  ✅ 全库商品图记录: ' + total + ' 条，覆盖商品 ' + db.prepare('select count(distinct product_id) c from product_images').get().c + ' 个')
+// 直接执行时打印结果（被巡检脚本 import 时也会执行，幂等安全）
+const r = ensureProductImages()
+console.log(`  ✅ 商品图巡检：覆盖 ${r.products} 个在售商品 · 新增记录 ${r.addedRows} 条 · 新增文件 ${r.addedFiles} 个`)
