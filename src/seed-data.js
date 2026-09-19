@@ -99,6 +99,12 @@ db.exec(`
   delete from categories;
   delete from audit_log;
 `);
+  try { db.exec('PRAGMA foreign_keys = ON'); } catch {}
+  // 自检：重置后外键约束必须恢复开启（关闭状态下会静默允许孤儿数据）
+  try {
+    const fk = db.prepare('pragma foreign_keys').get();
+    if (fk && String(fk.foreign_keys) === '0') console.warn('[reset] 警告：外键约束未恢复为开启，存在孤儿数据风险');
+  } catch {}
 
   const insCat = db.prepare(`insert into categories(name,sort,status,remark,created_by,created_at,updated_by,updated_at)
                              values (?,?,1,?,'seed',?,'seed',?)`);
