@@ -21,7 +21,7 @@ import {
 import { recordRequest, snapshot, prometheusText } from '../metrics.js';
 import {
   cartOf, cartItems, moveStock, ORDER_STATUS, ORDER_FLOW, now,
-  ensureSkus, skusOf, imagesOf, syncProductStock,
+  ensureSkus, skusOf, imagesOf, syncProductStock, ensureShippingTemplates, quoteShipping,
 } from './schema.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -191,6 +191,20 @@ const cartPayload = (userId) => {
   // 注意：spec 必须带出去——验收脚本就是靠它发现「价格按规格取、规格名却丢了」这个 bug 的
   return { items: items.map((i) => ({ id: i.id, productId: i.product_id, skuId: i.sku_id, sku: i.sku, spec: i.spec || '默认', name: i.name, price: i.price_cents / 100, qty: i.qty, stock: i.stock, subtotal: i.subtotal_cents / 100 })), totalCents: total, total: total / 100, count: items.reduce((a, b) => a + b.qty, 0) };
 };
+// 运费报价：结算页据此实时显示运费与应付金额
+route('POST', '/api/shop/shipping/quote', async (ctx) => {
+  const c = requireCustomer(ctx); if (!c) return;
+  const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), c.id);
+  const items = cartItems(cartOf(c.id));
+  const goods = items.reduce((a, b) => a + b.subtotal_cents, 0);
+  const count = items.reduce((a, b) => a + b.qty, 0);
+  const q = quoteShipping(addr ? (String(addr.region) + ' ' + String(addr.detail)) : '', goods, count);
+  return json(ctx.res, 200, {
+    goods: goods / 100, shipping: q.feeCents / 100, payable: (goods + q.feeCents) / 100,
+    template: q.name, freeApplied: q.freeApplied, freeOver: (q.freeOverCents ?? 0) / 100, itemCount: count,
+  });
+});
+
 route('GET', '/api/shop/cart', async (ctx) => {
   const c = requireCustomer(ctx); if (!c) return;
   return json(ctx.res, 200, cartPayload(c.id));
@@ -267,14 +281,17 @@ route('POST', '/api/shop/checkout', async (ctx) => {
     if (p.stock < i.qty) return json(ctx.res, 409, { error: `「${i.name}」库存不足（剩 ${p.stock} 件）` });
   }
 
-  const totalCents = items.reduce((a, b) => a + b.subtotal_cents, 0);
+  const goodsCents = items.reduce((a, b) => a + b.subtotal_cents, 0);
+  const itemCount = items.reduce((a, b) => a + b.qty, 0);
+  const shipQ = quoteShipping(String(addr.region ?? '') + ' ' + String(addr.detail ?? ''), goodsCents, itemCount);
+  const totalCents = goodsCents + shipQ.feeCents;   // 应付 = 商品 + 运费
   const orderNo = 'SO' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + String(Date.now()).slice(-5);
 
   db.exec('begin');
   try {
-    const r = db.prepare(`insert into orders(order_no, customer, phone, total_cents, item_count, status, remark, created_by, created_at, updated_by, updated_at)
-                          values (?,?,?,?,?, 'pending', ?,?,?,?,?)`)
-      .run(orderNo, addr.receiver, addr.phone, totalCents, items.reduce((a, b) => a + b.qty, 0),
+    const r = db.prepare(`insert into orders(order_no, customer, phone, total_cents, goods_cents, shipping_cents, item_count, status, remark, created_by, created_at, updated_by, updated_at)
+                          values (?,?,?,?,?,?,?, 'pending', ?,?,?,?,?)`)
+      .run(orderNo, addr.receiver, addr.phone, totalCents, goodsCents, shipQ.feeCents, itemCount,
         `${addr.region} ${addr.detail}${ctx.body.remark ? ' / ' + str(ctx.body.remark, 100) : ''}`, c.username, now(), c.username, now());
     const orderId = Number(r.lastInsertRowid);
     const insItem = db.prepare('insert into order_items(order_id, product_id, sku_id, sku, name, price_cents, qty, subtotal_cents) values (?,?,?,?,?,?,?,?)');
@@ -289,8 +306,8 @@ route('POST', '/api/shop/checkout', async (ctx) => {
     db.prepare('insert into payments(order_id, channel, amount_cents, status, created_at) values (?,?,?,?,?)').run(orderId, 'mock', totalCents, 'pending', now());
     db.prepare('delete from cart_items where cart_id = ?').run(cartOf(c.id));
     db.exec('commit');
-    audit(c.username, 'shop_checkout', `order#${orderId}`, `${orderNo} / ${(totalCents / 100).toFixed(2)} 元`, ctx.ip);
-    return json(ctx.res, 201, { orderNo, orderId, total: totalCents / 100 });
+    audit(c.username, 'shop_checkout', `order#${orderId}`, `${orderNo} / 商品 ${(goodsCents / 100).toFixed(2)} + 运费 ${(shipQ.feeCents / 100).toFixed(2)} = ${(totalCents / 100).toFixed(2)} 元（${shipQ.name}）`, ctx.ip);
+    return json(ctx.res, 201, { orderNo, orderId, goods: goodsCents / 100, shipping: shipQ.feeCents / 100, total: totalCents / 100, shippingTemplate: shipQ.name });
   } catch (e) {
     db.exec('rollback');
     return json(ctx.res, 500, { error: '下单失败：' + e.message });
@@ -351,7 +368,7 @@ route('GET', '/api/shop/orders/:orderNo', async (ctx) => {
   const items = db.prepare('select * from order_items where order_id = ?').all(o.id);
   const pay = db.prepare('select * from payments where order_id = ? order by id desc limit 1').get(o.id);
   return json(ctx.res, 200, {
-    order: { id: o.id, orderNo: o.order_no, total: o.total_cents / 100, status: o.status, statusText: ORDER_STATUS[o.status] ?? o.status,
+    order: { id: o.id, orderNo: o.order_no, total: o.total_cents / 100, goods: (o.goods_cents ?? o.total_cents) / 100, shipping: (o.shipping_cents ?? 0) / 100, status: o.status, statusText: ORDER_STATUS[o.status] ?? o.status,
       itemCount: o.item_count, receiver: o.customer, phone: o.phone, remark: o.remark, createdAt: o.created_at },
     items: items.map((i) => ({ name: i.name, sku: i.sku, price: i.price_cents / 100, qty: i.qty, subtotal: i.subtotal_cents / 100 })),
     payment: pay ? { channel: pay.channel, status: pay.status, tradeNo: pay.trade_no, paidAt: pay.paid_at } : null,
@@ -484,12 +501,14 @@ if (ORDER_TIMEOUT_MIN > 0) {
 
 // 启动即做一次幂等迁移（老商品补默认规格、老购物车挂到默认规格）
 const migrated = ensureSkus();
+const tplCount = ensureShippingTemplates();
 
 server.listen(PORT, HOST, () => {
   console.log(`[AURUM 商城前台 v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
   console.log(`  顾客侧：浏览/搜索/购物车/下单/我的订单   监控：/api/shop/metrics.prom`);
   if (migrated.created) console.log(`  [迁移] 为 ${migrated.created} 个商品补了默认规格，修正 ${migrated.cartsFixed} 条购物车记录`);
   console.log(`  未支付订单超时释放：${ORDER_TIMEOUT_MIN > 0 ? ORDER_TIMEOUT_MIN + " 分钟（每 " + SWEEP_INTERVAL_SEC + " 秒扫描）" : "已关闭"}`);
+  console.log(`  运费模板：${tplCount} 套`);
   console.log(`  规格(SKU)：${db.prepare('select count(*) c from product_skus').get().c} 条 · 商品图：${db.prepare('select count(*) c from product_images').get().c} 张`);
 });
 export { server };

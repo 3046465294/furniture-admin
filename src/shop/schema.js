@@ -153,6 +153,55 @@ export function syncProductStock(productId) {
   return s;
 }
 
+// ── 运费模板 ──
+db.exec(`
+create table if not exists shipping_templates (
+  id              integer primary key autoincrement,
+  name            text not null,
+  region_keywords text default '',      -- 命中地址中任一关键词即适用（逗号分隔）
+  base_cents      integer not null default 0,   -- 首件运费
+  per_item_cents  integer not null default 0,   -- 续件运费
+  free_over_cents integer not null default 0,   -- 满此金额包邮（0 = 不包邮）
+  enabled         integer not null default 1,
+  sort            integer not null default 0,
+  created_at      text
+);
+`);
+try { db.exec('alter table orders add column goods_cents integer'); } catch { /* 已存在 */ }
+try { db.exec('alter table orders add column shipping_cents integer'); } catch { /* 已存在 */ }
+
+/** 幂等种子：三档运费模板（默认免运费，保证演示环境可预期） */
+export function ensureShippingTemplates() {
+  const n = db.prepare('select count(*) c from shipping_templates').get().c;
+  if (n > 0) return n;
+  const ins = db.prepare('insert into shipping_templates(name, region_keywords, base_cents, per_item_cents, free_over_cents, enabled, sort, created_at) values (?,?,?,?,?,1,?,?)');
+  ins.run('默认（演示免运费）', '', 0, 0, 0, 10, now());
+  ins.run('常规地区', '北京,上海,广东,江苏,浙江,四川,湖北', 1200, 300, 200000, 20, now());
+  ins.run('偏远地区', '新疆,西藏,青海,内蒙古,甘肃,宁夏,海南', 3500, 800, 500000, 30, now());
+  return 3;
+}
+
+/**
+ * 计算运费。region 为收货地区文本（用于匹配模板），goodsCents 为商品金额，itemCount 为件数。
+ * 匹配规则：命中关键词最多的模板优先；无命中则用默认模板（sort 最小）。
+ */
+export function quoteShipping(region, goodsCents, itemCount) {
+  const list = db.prepare('select * from shipping_templates where enabled = 1 order by sort, id').all();
+  if (!list.length) return { feeCents: 0, name: '未配置运费模板', freeApplied: false };
+  const text = String(region ?? '');
+  let best = null, bestHit = 0;
+  for (const t of list) {
+    const kws = String(t.region_keywords || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const hit = kws.filter((k) => text.includes(k)).length;
+    if (hit > bestHit) { best = t; bestHit = hit }
+  }
+  const tpl = best ?? list[0];
+  const free = tpl.free_over_cents > 0 && goodsCents >= tpl.free_over_cents;
+  const extra = Math.max(0, itemCount - 1);
+  const feeCents = free ? 0 : tpl.base_cents + tpl.per_item_cents * extra;
+  return { feeCents, name: tpl.name, freeApplied: free, freeOverCents: tpl.free_over_cents };
+}
+
 export const ORDER_STATUS = { pending: '待付款', paid: '已付款', shipped: '已发货', done: '已完成', cancelled: '已取消' };
 /** 状态机：前台只能做「支付」和「取消」，发货/完成由后台操作 */
 export const ORDER_FLOW = { pending: ['paid', 'cancelled'], paid: ['shipped', 'cancelled'], shipped: ['done'], done: [], cancelled: [] };
