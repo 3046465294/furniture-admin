@@ -1,4 +1,5 @@
 @echo off
+set METRICS_TOKEN=a9eb6f7676ba9c20083ce671818c9aa039e105d9cee3b37f
 rem Zhizun Furniture Admin (v2.0 rebuild) - local only, published via Cloudflare tunnel
 rem Idempotent: exits if port 8090 is already served.
 netstat -ano | findstr /C:"LISTENING" | findstr /C:":8090 " >nul 2>&1

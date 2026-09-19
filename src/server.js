@@ -318,12 +318,18 @@ route('GET', '/api/system/health', async ({ res }) => json(res, 200, {
 }));
 route('GET', '/api/system/metrics', guard(async ({ res }) =>
   json(res, 200, { ...snapshot(), sessions: activeSessionCount(), sseClients: sseClientCount(), tables: tableCounts(), dbKB: dbSizeKB() })));
-route('GET', '/api/system/metrics.prom', guard(async ({ res }) => {
+// Prometheus 端点：机器抓取无法携带会话 Cookie，因此支持静态 Bearer 令牌（METRICS_TOKEN）。
+// 设计取舍：设了令牌就只认令牌（避免两个入口都开着）；没设令牌则回落到会话鉴权，本地开发方便。
+route('GET', '/api/system/metrics.prom', async ({ req, res, user }) => {
+  const expected = process.env.METRICS_TOKEN;
+  const bearer = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+  const allowed = expected ? bearer === expected : !!user;
+  if (!allowed) return json(res, 401, { error: expected ? '缺少或错误的 Bearer 令牌' : '未登录' });
   const body = prometheusText();
-  res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8', ...securityHeaders(isSecure({ headers: {} })) });
+  res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8', ...securityHeaders(isSecure(req)) });
   res.end(body);
   return { status: 200 };
-}));
+});
 route('GET', '/api/system/logs', guard(async ({ res, url }) => json(res, 200, { rows: recentLogEntries(clampInt(url.searchParams.get('limit'), 1, 200, 60)) })));
 route('GET', '/api/system/audit', guard(async ({ res }) => json(res, 200, {
   rows: db.prepare('select * from audit_log order by id desc limit 50').all(),
