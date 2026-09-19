@@ -160,7 +160,7 @@ console.log('\n【8】登录限流与锁定')
   let last = 0
   let lastFailed = 0
   for (let i = 0; i < 8; i++) {
-    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'lockprobe_' + Date.now().toString(36), password: 'wrong-' + i } })
+    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'demo', password: 'wrong-' + i } })
     last = r.status
     lastFailed = r.data?.failed ?? lastFailed
     if (r.status === 429) break
