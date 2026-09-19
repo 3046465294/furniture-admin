@@ -43,7 +43,10 @@ target.skus.forEach((k) => console.log('      · ' + k.spec + '  ¥' + k.price +
 const login = await api('/api/shop/login', { method: 'POST', body: { username: 'buyer01', password: 'Buyer@2026' } })
 ok('顾客登录', login.status === 200)
 
-const sku = target.skus[1]
+// 验收可重复执行：先清空购物车，并挑一个库存足够的规格（重复跑会消耗演示库存）
+const c0 = await api('/api/shop/cart')
+for (const i of c0.data.items ?? []) await api('/api/shop/cart/' + i.id, { method: 'DELETE' })
+const sku = target.skus.find((k) => k.stock >= 4) ?? target.skus[0]
 const before = sku.stock
 const add = await api('/api/shop/cart', { method: 'POST', body: { productId: P.id, skuId: sku.id, qty: 2 } })
 ok('按指定规格加购', add.status === 200)

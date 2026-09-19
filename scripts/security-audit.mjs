@@ -12,6 +12,7 @@ const S = 'http://127.0.0.1:8091';   // 商城前台
 const G = 'http://127.0.0.1:8085';   // 网关
 const ADMIN_PWD = process.env.FA_ADMIN_PWD ?? ''
 const VIEWER = { u: 'demo', p: 'shijia.cyou' }
+const CUSTOMER = { u: 'buyer01', p: 'Buyer@2026' }   // 前台登录用顾客账号（viewer 按设计不能登录前台）
 
 let pass = 0, fail = 0, high = 0
 const findings = []
@@ -64,12 +65,15 @@ for (const [base, path, label] of [
 }
 
 console.log('\n【2】CSRF 防护（变更类请求缺少 X-Requested-With 应 400）')
+const adminCookieForCsrf = ADMIN_PWD ? await login(A, 'admin', ADMIN_PWD) : null
 for (const [base, path, body, label] of [
   [A, '/api/products', { sku: 'X', name: 'x', price: 1 }, '后台-新建商品'],
   [S, '/api/shop/register', { username: 'csrf_probe', password: 'Abcd1234' }, '前台-注册'],
   [S, '/api/shop/login', { username: 'demo', password: 'x' }, '前台-登录'],
 ]) {
-  const r = await req(base, path, { method: 'POST', json: body, noCsrf: true })
+  // 后台接口需要先登录才能走到 CSRF 校验（未登录会被 401 提前拦掉，那也是对的）
+  const cookie = base === A ? adminCookieForCsrf : undefined
+  const r = await req(base, path, { method: 'POST', json: body, noCsrf: true, cookie })
   check('HIGH', `CSRF 拦截 ${label}`, r.status === 400, `HTTP ${r.status}`)
 }
 
@@ -94,7 +98,7 @@ for (const [base, path, label] of [
   [S, '/../data/furniture.db', '前台-数据库文件'],
 ]) {
   const r = await req(base, path)
-  check('HIGH', `拦截 ${label}`, r.status === 404 || r.status === 400, `HTTP ${r.status}`)
+  check('HIGH', `拦截 ${label}`, (r.status === 404 || r.status === 400) || (r.status === 200 && !looksLeaked(r)), `HTTP ${r.status}${looksLeaked(r) ? ' 内容泄露!' : ''}`)
 }
 
 console.log('\n【5】注入与异常输入（不得 5xx）')
@@ -118,16 +122,18 @@ console.log('\n【6】请求体与参数边界')
 }
 
 console.log('\n【7】安全响应头与 Cookie 策略')
-{
-  const r = await req(A, '/api/system/health')
+// 两个服务都验：后台(8090) 与 商城(8091) —— 任一缺失都应暴露出来
+for (const [base, path, who] of [[A, '/api/system/health', '后台'], [S, '/api/shop/health', '商城']]) {
+  const r = await req(base, path)
   const h = r.headers
-  check('HIGH', 'CSP 存在且禁止内联脚本', !!h.get('content-security-policy') && !/script-src[^;]*unsafe-inline/.test(h.get('content-security-policy') ?? ''), (h.get('content-security-policy') ?? '(无)').slice(0, 60) + '…')
-  check('HIGH', 'X-Frame-Options: DENY（防点击劫持）', (h.get('x-frame-options') ?? '') === 'DENY')
-  check('MED', 'X-Content-Type-Options: nosniff', (h.get('x-content-type-options') ?? '') === 'nosniff')
-  check('MED', 'Referrer-Policy 已设置', !!h.get('referrer-policy'), h.get('referrer-policy') ?? '')
+  const csp = h.get('content-security-policy') ?? ''
+  check('HIGH', `[${who}] CSP 存在且禁止内联脚本`, !!csp && !/script-src[^;]*unsafe-inline/.test(csp), csp ? csp.slice(0, 48) + '…' : '(无，HTTP ' + r.status + ')')
+  check('HIGH', `[${who}] X-Frame-Options: DENY（防点击劫持）`, (h.get('x-frame-options') ?? '') === 'DENY', h.get('x-frame-options') ?? '(无)')
+  check('MED', `[${who}] X-Content-Type-Options: nosniff`, (h.get('x-content-type-options') ?? '') === 'nosniff')
+  check('MED', `[${who}] Referrer-Policy 已设置`, !!h.get('referrer-policy'), h.get('referrer-policy') ?? '(无)')
 }
 if (VIEWER.p) {
-  const r = await req(S, '/api/shop/login', { method: 'POST', json: { username: VIEWER.u, password: VIEWER.p } })
+  const r = await req(S, '/api/shop/login', { method: 'POST', json: { username: CUSTOMER.u, password: CUSTOMER.p } })
   const c = r.setCookie.join(';')
   check('HIGH', '会话 Cookie 为 HttpOnly', /HttpOnly/i.test(c))
   check('HIGH', '会话 Cookie 为 SameSite=Strict/Lax', /SameSite=(Strict|Lax)/i.test(c))

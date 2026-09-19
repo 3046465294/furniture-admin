@@ -650,6 +650,8 @@ alertTimer.unref?.();
 const server = createServer(async (req, res) => {
   const t0 = Date.now();
   const secure = isSecure(req);
+  // 统一挂安全头：API 响应同样需要（原来只有静态文件带，接口返回裸奔）
+  for (const [hk, hv] of Object.entries(securityHeaders(secure))) { try { res.setHeader(hk, hv) } catch {} }
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`);
   const pathname = url.pathname;
   const ip = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '';
