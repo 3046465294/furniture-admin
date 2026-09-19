@@ -22,17 +22,26 @@ const check = (level, name, ok, detail = '') => {
 }
 
 async function req(base, path, opts = {}) {
-  const headers = { ...(opts.headers ?? {}) }
-  if (opts.cookie) headers.cookie = opts.cookie
-  if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; headers['X-Requested-With'] = 'fetch' }
-  const res = await fetch(base + path, {
-    method: opts.method ?? 'GET', headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json),
-    redirect: 'manual',
-  })
-  const setCookie = res.headers.getSetCookie?.() ?? []
-  const text = await res.text()
-  let data = {}; try { data = JSON.parse(text) } catch { data = { raw: text.slice(0, 200) } }
-  return { status: res.status, headers: res.headers, data, text, cookie: setCookie.map((c) => c.split(';')[0]).join('; '), setCookie }
+  // 关键：本函数永不抛异常。任何单项的网络错误/解析错误都退化成 status 0，
+  // 这样一轮审计不会被某一个探针搞崩（踩过的坑：空 header 值让 fetch 抛错，整轮中断）
+  try {
+    const headers = { ...(opts.headers ?? {}) }
+    if (opts.cookie) headers.cookie = opts.cookie
+    if (opts.json !== undefined) {
+      headers['Content-Type'] = 'application/json'
+      if (!opts.noCsrf) headers['X-Requested-With'] = 'fetch'   // noCsrf: true 用来实测"缺少该头的请求"
+    }
+    const res = await fetch(base + path, {
+      method: opts.method ?? 'GET', headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json),
+      redirect: 'manual',
+    })
+    const setCookie = res.headers.getSetCookie?.() ?? []
+    const text = await res.text()
+    let data = {}; try { data = JSON.parse(text) } catch { data = { raw: text.slice(0, 200) } }
+    return { status: res.status, headers: res.headers, data, text, cookie: setCookie.map((c) => c.split(';')[0]).join('; '), setCookie }
+  } catch (e) {
+    return { status: 0, headers: new Headers(), data: { error: 'probe failed: ' + e.message }, text: '', cookie: '', setCookie: [], probeError: e.message }
+  }
 }
 const login = async (base, username, password) => {
   const r = await req(base, base === S || base === G ? '/api/shop/login' : '/api/auth/login', { method: 'POST', json: { username, password } })
@@ -60,7 +69,7 @@ for (const [base, path, body, label] of [
   [S, '/api/shop/register', { username: 'csrf_probe', password: 'Abcd1234' }, '前台-注册'],
   [S, '/api/shop/login', { username: 'demo', password: 'x' }, '前台-登录'],
 ]) {
-  const r = await req(base, path, { method: 'POST', json: body, headers: { 'X-Requested-With': '' } })
+  const r = await req(base, path, { method: 'POST', json: body, noCsrf: true })
   check('HIGH', `CSRF 拦截 ${label}`, r.status === 400, `HTTP ${r.status}`)
 }
 
