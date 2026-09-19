@@ -436,6 +436,16 @@ async function route() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// 委托：卡片加购（踩过的坑——原来只在详情页绑了事件，列表卡片上的按钮点了没反应也不报错）
+main.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-add]');
+  if (!b) return;
+  e.preventDefault();
+  b.disabled = true;
+  await addToCart(Number(b.dataset.add), 1);
+  b.disabled = false;
+});
+
 $('searchForm').addEventListener('submit', (e) => {
   e.preventDefault();
   location.hash = '#/list?q=' + encodeURIComponent($('q').value.trim());
