@@ -26,7 +26,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, '..', 'public');
 const PORT = Number(process.env.PORT ?? 8090);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const VERSION = '2.0.0';
+const VERSION = '2.2.0';
 const MAX_BODY = 256 * 1024;
 const STARTED_AT = Date.now();
 
@@ -632,7 +632,7 @@ server.listen(PORT, HOST, () => {
   }, RESET_INTERVAL_MS);
   resetTimer.unref?.();
 
-  console.log(`[furniture-admin v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
+  console.log(`[AURUM 家居运营中台 v${VERSION}] 已启动 → http://${HOST}:${PORT}/`);
   console.log(`  实时监控：/api/system/stream（SSE）   Prometheus：/api/system/metrics.prom`);
   console.log(`  演示数据每 ${Math.round(RESET_INTERVAL_MS / 60000)} 分钟自动重置（下次：${new Date(nextResetAt).toLocaleTimeString('zh-CN', { hour12: false })}）`);
   if (admin) {
