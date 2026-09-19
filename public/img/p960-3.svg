@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800" role="img" aria-label="岩板伸缩餐桌（1.4-1.8m） 示意图 3">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#241d28"/><stop offset="0.55" stop-color="#5b3a6b"/><stop offset="1" stop-color="#241d28"/>
+    </linearGradient>
+    <linearGradient id="sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#g)"/>
+  <rect width="800" height="800" fill="url(#sh)"/>
+  <text x="400" y="360" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="260" font-weight="700" fill="#e0b8ff" opacity="0.92">岩</text>
+  <text x="400" y="470" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="40" fill="#ffffff" opacity="0.92">岩板伸缩餐桌（1.4-1.8m）</text>
+  <text x="400" y="530" text-anchor="middle" font-family="system-ui,'PingFang SC','Microsoft YaHei'" font-size="26" fill="#ffffff" opacity="0.6">餐桌椅 · 视图 3/3 · 示意图（非实拍）</text>
+  <text x="400" y="740" text-anchor="middle" font-family="system-ui" font-size="22" fill="#ffffff" opacity="0.38">AURUM 家居商城 · 演示素材</text>
+</svg>
