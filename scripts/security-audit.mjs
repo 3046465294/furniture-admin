@@ -61,6 +61,18 @@ async function clearLoginLock() {
 }
 await clearLoginLock()
 
+// 专用限流探针账号：避免与越权检查抢同一个 demo 账号（被锁后越权检查会静默跳过）
+const PROBE = { u: 'audit_probe', p: 'Probe@' + Date.now().toString(36) }
+try {
+  const { hashPassword } = await import('file:///C:/Users/winner/Desktop/furniture-admin/src/auth.js')
+  const { DatabaseSync } = await import('node:sqlite')
+  const d = new DatabaseSync('C:/Users/winner/Desktop/furniture-admin/data/furniture.db')
+  d.prepare("insert into users(username,display_name,password_hash,role,active,created_at) values (?,?,?,'customer',1,datetime('now')) on conflict(username) do update set password_hash=excluded.password_hash, active=1")
+    .run(PROBE.u, '审计探针账号', hashPassword(PROBE.p))
+  d.close()
+  console.log('  [setup] 限流探针账号就绪：' + PROBE.u)
+} catch (e) { console.log('  [setup] 探针账号创建失败（将导致限流检查失败）: ' + e.message) }
+
 console.log('======== AURUM 安全审计 ========')
 console.log('\n【1】未认证访问（应全部 401）')
 for (const [base, path, label] of [
@@ -99,8 +111,11 @@ if (viewerCookie) {
   if (adminCookie) {
     const r2 = await req(A, '/api/users', { method: 'POST', json: { username: 'rbac_probe', password: 'Abcd1234', role: 'admin' }, cookie: viewerCookie })
     check('HIGH', 'viewer 尝试建管理员账号', r2.status === 401 || r2.status === 403, `HTTP ${r2.status}`)
-  } else console.log('  [SKIP]  跳过 RBAC 写检查（未提供 FA_ADMIN_PWD）')
+  } else check('HIGH', 'RBAC 写检查（缺少后台口令，不允许静默跳过）', false, '请设置 FA_ADMIN_PWD')
 }
+
+// 前置会话拿不到 = 这项没验成，必须计 FAIL（不能因为账号被锁就当作通过）
+if (!viewerCookie) check('HIGH', '越权检查前置会话（viewer 登录失败，不允许静默跳过）', false, 'viewer 账号可能被上一轮锁定')
 
 console.log('\n【4】路径穿越与敏感文件暴露（应 404）')
 // 判定标准：404/400 为拦截；200 时看内容里有没有源码/数据库特征（SPA 首页属正常）
@@ -160,7 +175,7 @@ console.log('\n【8】登录限流与锁定')
   let last = 0
   let lastFailed = 0
   for (let i = 0; i < 8; i++) {
-    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: 'demo', password: 'wrong-' + i } })
+    const r = await req(A, '/api/auth/login', { method: 'POST', json: { username: PROBE.u, password: 'wrong-' + i } })
     last = r.status
     lastFailed = r.data?.failed ?? lastFailed
     if (r.status === 429) break
