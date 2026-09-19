@@ -62,7 +62,7 @@ async function clearLoginLock() {
 await clearLoginLock()
 
 // 专用限流探针账号：避免与越权检查抢同一个 demo 账号（被锁后越权检查会静默跳过）
-const PROBE = { u: 'audit_probe', p: 'Probe@' + Date.now().toString(36) }
+const PROBE = { u: 'audit_probe_' + Date.now().toString(36), p: 'Probe@' + Date.now().toString(36) }   // 每轮唯一：避免跨轮次锁定污染其它检查
 try {
   const { hashPassword } = await import('file:///C:/Users/winner/Desktop/furniture-admin/src/auth.js')
   const { DatabaseSync } = await import('node:sqlite')
