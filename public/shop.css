@@ -180,3 +180,6 @@ main:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+/* 演示环境提示：如实但不喧宾夺主 */
+.demo-note { max-width: 720px; margin: 10px auto 0; text-align: center; font-size: 12px; line-height: 1.7; color: var(--dim, rgba(255,244,216,.45)); }
+.demo-note strong { color: var(--sub, rgba(255,244,216,.7)); font-weight: 600; }

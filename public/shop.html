@@ -6,7 +6,7 @@
 <title>AURUM 家居商城</title>
 <meta name="description" content="AURUM 家居商城 —— 沙发、床类、餐桌椅、衣柜、储物收纳与户外家具。">
 <link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/shop.css?v=1.6.1">
+<link rel="stylesheet" href="/shop.css?v=1.6.5">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0c0a07">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -51,6 +51,10 @@
 <footer class="shop-foot">
   <div>AURUM 家居商城 · 作品演示系统（订单/支付为演示数据，请勿填写真实个人信息）</div>
   <div class="dim">服务端：Node 24 + 内置 SQLite，零第三方依赖 · 前后台分离部署 · 指标端点 /api/shop/metrics.prom</div>
+  <p class="demo-note">
+    演示环境：商品与订单数据<strong>每 10 分钟自动重置</strong>（含购物车），这是刻意设计的演示行为；
+    支付为<strong>模拟实现</strong>，不接入任何真实支付渠道；商品图为程序生成的示意图（非实拍）。
+  </p>
 </footer>
 
 <!-- 购物车抽屉 -->
@@ -64,6 +68,6 @@
 </aside>
 <div class="scrim" id="scrim" hidden></div>
 
-<script src="/shop.js?v=1.6.4" type="module"></script>
+<script src="/shop.js?v=1.6.5" type="module"></script>
 </body>
 </html>
