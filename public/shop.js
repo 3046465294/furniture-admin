@@ -239,13 +239,25 @@ async function viewProduct(id) {
 }
 
 async function addToCart(productId, qty, silent, skuId) {
-  if (!state.user) { toast('请先登录后再加购'); location.hash = '#/account'; return false; }
+  // 会话权威在服务端：直接请求，只有真的 401 才引导登录。
+  // （原实现以本地 state.user 为唯一判据，会话在别处建立时会误判"未登录"）
   try {
     state.cart = await api('/api/shop/cart', { method: 'POST', body: skuId ? { productId, skuId, qty } : { productId, qty } });
+    if (!state.user) {
+      // 请求成功说明会话有效 —— 顺手把本地状态补齐（自愈式同步）
+      try {
+        const me = await api('/api/shop/me');
+        state.user = me.user;
+        $('navAccount').textContent = state.user ? (state.user.nickname || state.user.username) + ' · 退出' : '登录';
+      } catch { /* 忽略：不影响加购结果 */ }
+    }
     renderCartBadge(); renderCartDrawer();
     if (!silent) { toast('已加入购物车'); openDrawer(); }
     return true;
-  } catch (e) { toast(e.message); return false; }
+  } catch (e) {
+    if (e.status === 401) { toast('请先登录后再加购'); location.hash = '#/account'; return false; }
+    toast(e.message); return false;
+  }
 }
 
 // ────────── 购物车 ──────────
