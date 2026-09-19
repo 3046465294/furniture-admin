@@ -9,11 +9,11 @@
  *
  * 版本：改动壳资源时必须升 CACHE_VERSION，否则用户会一直拿到旧壳（我在这上面踩过缓存坑）
  */
-const CACHE_VERSION = 'aurum-shop-v1.8.0';
+const CACHE_VERSION = 'aurum-shop-v1.8.1';
 const SHELL = [
   '/',
   '/shop.html',
-  '/shop.css?v=1.8.0',
+  '/shop.css?v=1.8.1',
   '/style.css',
   '/shop.js?v=1.8.0',
   '/manifest.json',

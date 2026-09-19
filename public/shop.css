@@ -320,3 +320,20 @@ body.shop .hero, body.shop .tiles .tile, body.shop .promise, body.shop .panel { 
 body.shop .hero { background: #f8fafc; }
 body.shop .badge { background: #eef2f8; border-color: #cbd5e1; color: #5a6a7f; }
 body.shop .badge.ok { background: #eef2f8; border-color: #0369a1; color: #0369a1; }
+
+/* ── 第四轮：缩略图容器改浅色（商品图 SVG 已改浅，但容器底色仍是旧的深色渐变）── */
+body.shop .mini,
+body.shop .thumb,
+body.shop .pcard img,
+body.shop .pcard .thumb,
+body.shop .img-main,
+body.shop .thumbs img,
+body.shop .citem .mini,
+body.shop .drawer .mini {
+  background: #f1f5f9 !important;
+  background-image: none !important;
+  border: 1px solid #e2e8f0;
+  color: #0369a1;
+}
+body.shop .mini [class*="grad"],
+body.shop .thumb [class*="grad"] { background: none !important; }
