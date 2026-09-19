@@ -472,6 +472,69 @@ function moveStockDb(productId, delta, reason, ref) {
   db.prepare('insert into stock_movements(product_id, delta, reason, ref, created_at) values (?,?,?,?,?)').run(productId, delta, reason, ref, now());
 }
 
+// ── 规格（SKU）管理：商品域的运营入口 ──
+/** 商品级库存 = 各启用规格之和（与前台/告警口径一致） */
+function syncProductStock(productId) {
+  const total = db.prepare('select coalesce(sum(stock), 0) t from product_skus where product_id = ? and status = 1').get(productId).t;
+  db.prepare('update products set stock = ?, updated_at = ? where id = ?').run(total, now(), productId);
+  return total;
+}
+
+route('GET', '/api/products/:id/skus', guard(async ({ res, params }) => {
+  const pid = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const rows = db.prepare('select id, spec, specs_json, sku_code, price_cents, stock, status from product_skus where product_id = ? order by status desc, id').all(pid);
+  return json(res, 200, { rows: rows.map((r) => ({ ...r, price: r.price_cents / 100 })) });
+}, 'read'));
+
+route('POST', '/api/products/:id/skus', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const pid = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const p = db.prepare('select * from products where id = ? and deleted = 0').get(pid);
+  if (!p) return json(res, 404, { error: '商品不存在' });
+  const spec = str(body.spec, 60);
+  if (!spec) return json(res, 400, { error: '规格名称必填（如「米白 / 三人位」）' });
+  if (db.prepare('select id from product_skus where product_id = ? and spec = ?').get(pid, spec)) return json(res, 409, { error: '该规格已存在' });
+  const priceCents = body.price === undefined || body.price === null || body.price === ''
+    ? p.price_cents
+    : Math.max(0, Math.round(Number(body.price) * 100));
+  const stock = clampInt(body.stock, 0, 1000000000, 0);
+  const r = db.prepare('insert into product_skus(product_id, spec, specs_json, sku_code, price_cents, stock, status, created_at, updated_at) values (?,?,?,?,?,?,1,?,?)')
+    .run(pid, spec, JSON.stringify(body.specs ?? {}), str(body.skuCode, 40), priceCents, stock, now(), now());
+  audit(user.username, 'sku_create', 'sku#' + r.lastInsertRowid, p.name + ' / ' + spec + ' ¥' + (priceCents / 100).toFixed(2) + ' 库存' + stock, ip);
+  return json(res, 201, { id: Number(r.lastInsertRowid), productStock: syncProductStock(pid) });
+}, 'write'));
+
+route('PUT', '/api/skus/:id', guard(async ({ req, res, body, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const s = db.prepare('select * from product_skus where id = ?').get(id);
+  if (!s) return json(res, 404, { error: '规格不存在' });
+  const spec = body.spec === undefined ? s.spec : str(body.spec, 60);
+  if (!spec) return json(res, 400, { error: '规格名称不能为空' });
+  const dup = db.prepare('select id from product_skus where product_id = ? and spec = ? and id <> ?').get(s.product_id, spec, id);
+  if (dup) return json(res, 409, { error: '同商品下已有同名规格' });
+  const priceCents = body.price === undefined || body.price === null || body.price === ''
+    ? s.price_cents
+    : Math.max(0, Math.round(Number(body.price) * 100));
+  const stock = body.stock === undefined ? s.stock : clampInt(body.stock, 0, 1000000000, 0);
+  db.prepare('update product_skus set spec = ?, price_cents = ?, stock = ?, sku_code = ?, updated_at = ? where id = ?')
+    .run(spec, priceCents, stock, body.skuCode === undefined ? s.sku_code : str(body.skuCode, 40), now(), id);
+  audit(user.username, 'sku_update', 'sku#' + id, spec + ' ¥' + (priceCents / 100).toFixed(2) + ' 库存' + stock, ip);
+  return json(res, 200, { ok: true, productStock: syncProductStock(s.product_id) });
+}, 'write'));
+
+route('DELETE', '/api/skus/:id', guard(async ({ req, res, params, user, ip }) => {
+  if (!csrfOk(req)) return json(res, 400, { error: '缺少 X-Requested-With' });
+  const id = clampInt(params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+  const s = db.prepare('select * from product_skus where id = ?').get(id);
+  if (!s) return json(res, 404, { error: '规格不存在' });
+  const enabled = db.prepare('select count(*) c from product_skus where product_id = ? and status = 1').get(s.product_id).c;
+  if (enabled <= 1) return json(res, 409, { error: '至少保留一个启用规格，否则商品将不可售' });
+  db.prepare('update product_skus set status = 0, updated_at = ? where id = ?').run(now(), id);
+  audit(user.username, 'sku_disable', 'sku#' + id, s.spec, ip);
+  return json(res, 200, { ok: true, productStock: syncProductStock(s.product_id) });
+}, 'write'));
+
 // ── 二期补充：订单履约（发货 / 完成 / 退款）──
 // 前台只能「支付」与「取消」；发货、完成、退款是运营动作，只存在于后台。
 route('POST', '/api/orders/:id/ship', guard(async ({ req, res, body, params, user, ip }) => {
