@@ -1,0 +1,32 @@
+{
+  "name": "AURUM 家居商城",
+  "short_name": "AURUM 商城",
+  "description": "AURUM 家居商城 —— 沙发、床类、餐桌椅、衣柜、储物收纳与户外家具。支持规格选择、购物车、下单与订单追踪。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0c0a07",
+  "theme_color": "#0c0a07",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "全部商品", "url": "/#/list" },
+    { "name": "购物车", "url": "/#/cart" },
+    { "name": "我的订单", "url": "/#/orders" }
+  ]
+}

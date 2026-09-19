@@ -660,3 +660,12 @@ window.addEventListener('hashchange', route);
   await bootCart();
   await route();
 })();
+
+// ────────── PWA：注册 Service Worker（离线壳 + 资源预缓存）──────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((reg) => { window.__faSW = reg.scope; })
+      .catch((e) => { console.warn('Service Worker 注册失败（不影响使用）:', e.message); });
+  });
+}
