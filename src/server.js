@@ -173,7 +173,7 @@ function listCategories() {
     from categories c where c.deleted = 0 order by c.sort asc, c.id asc
   `).all().map((r) => ({
     id: r.id, name: r.name, sort: r.sort, status: r.status, remark: r.remark ?? '',
-    productCount: r.product_count, createdBy: r.created_by, createdAt: r.created_at,
+    parentId: r.parent_id ?? null, productCount: r.product_count, createdBy: r.created_by, createdAt: r.created_at,
   }));
 }
 
