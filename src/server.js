@@ -8,6 +8,7 @@
  *   · 每一次 API 请求都进指标系统 → 监控面板与 /metrics 都能看到
  */
 import { createServer } from 'node:http';
+import { ensureContentTables, registerContentRoutes } from './content.js'
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, normalize, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -670,6 +671,10 @@ function matchRoute(method, pathname) {
 const RESET_INTERVAL_MS = Number(process.env.DEMO_RESET_MS ?? 10 * 60 * 1000);
 let nextResetAt = Date.now() + RESET_INTERVAL_MS;
 
+// ── 站点内容域（项目案例 / 博客文章）：表初始化 + 路由注册 ──
+const contentCounts = ensureContentTables();
+registerContentRoutes({ route, guard, json, csrfOk, clampInt, str });
+console.log(`  内容域：项目 ${contentCounts.projects} · 文章 ${contentCounts.posts}`);
 // 启动指标推送（管理员账号在 listen 回调里创建，那里会把随机密码打印一次）
 // enrich：把需要查库/进程信息的字段补进 SSE 推送里，否则面板上的「在线会话 / 数据库 / Node」会是空的
 startMetricsTicker(1000, (snap) => {
