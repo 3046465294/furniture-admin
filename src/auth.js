@@ -32,7 +32,6 @@ function loadSecret() {
     mkdirSync(dir, { recursive: true });
     const fresh = randomBytes(32).toString('hex');
     writeFileSync(file, fresh, { mode: 0o600 });
-', { mode: 0o600 });
     console.log('[auth] 已生成新的会话签名密钥 data/secret.key（请勿提交到版本库）');
     return fresh;
   } catch (e) {
