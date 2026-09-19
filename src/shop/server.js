@@ -213,7 +213,7 @@ const cartPayload = (userId) => {
 // 运费报价：结算页据此实时显示运费与应付金额
 route('POST', '/api/shop/shipping/quote', async (ctx) => {
   const cartId = resolveCartId(ctx);
-  const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), c.id);
+  const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), customerOf(ctx.user)?.id ?? 0);
   const items = cartItems(cartId);
   const goods = items.reduce((a, b) => a + b.subtotal_cents, 0);
   const count = items.reduce((a, b) => a + b.qty, 0);
@@ -287,7 +287,7 @@ route('POST', '/api/shop/addresses', async (ctx) => {
 route('POST', '/api/shop/checkout', async (ctx) => {
   if (!csrfOk(ctx.req)) return json(ctx.res, 400, { error: '缺少 X-Requested-With' });
   const c = requireCustomer(ctx); if (!c) return;
-  const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), c.id);
+  const addr = db.prepare('select * from addresses where id = ? and user_id = ?').get(int(ctx.body.addressId, 1, 1e15, 0), customerOf(ctx.user)?.id ?? 0);
   if (!addr) return json(ctx.res, 400, { error: '请选择有效的收货地址' });
   const items = cartItems(cartOf(c.id));
   if (!items.length) return json(ctx.res, 400, { error: '购物车是空的' });
