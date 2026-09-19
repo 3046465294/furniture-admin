@@ -43,14 +43,18 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ────────── 视图切换 ──────────
-document.querySelectorAll('.navbtn').forEach((b) => b.addEventListener('click', () => {
+// 用事件委托：动态追加的导航项（用户与告警 / 趋势）也要能切换视图。
+// 踩过的坑：原来是对当时已有的按钮逐个 addEventListener，后加的按钮点不动（也没有报错）。
+document.querySelector('nav').addEventListener('click', (e) => {
+  const b = e.target.closest('.navbtn');
+  if (!b || !b.dataset.view) return;
   document.querySelectorAll('.navbtn').forEach((x) => x.classList.toggle('on', x === b));
   document.querySelectorAll('.view').forEach((v) => (v.hidden = v.id !== 'view-' + b.dataset.view));
   if (b.dataset.view === 'products') loadProducts();
   if (b.dataset.view === 'categories') loadCategories();
   if (b.dataset.view === 'orders') loadOrders();
   if (b.dataset.view === 'system') loadSystem();
-}));
+});
 
 // ────────── 实时监控（SSE）──────────
 // 演示重置倒计时（服务端每 10 分钟把业务数据恢复为种子状态——登录页上的承诺，界面上要看得见）
@@ -92,6 +96,7 @@ function connectStream() {
     $('kpiRss').innerHTML = m.rssMB + '<small>MB</small>';
     $('kpiDb').innerHTML = (m.dbKB ?? 0) + '<small>KB</small>';
     window.__faRenderAlerts?.(m.alerts);   // 活跃告警横幅（由 adminPanel 提供渲染函数）
+    window.__faOnMetrics?.(m);               // 趋势页钩子：把每秒指标累积成长期曲线
     drawSpark(m.series ?? []);
     const tb = $('slowBody');
     tb.innerHTML = (m.slowest ?? []).length
@@ -537,4 +542,126 @@ async function boot() {
   if (appRoot) new MutationObserver(() => setTimeout(sync, 40)).observe(appRoot, { attributes: true, attributeFilter: ['hidden'] });
   window.addEventListener('resize', () => { cur = null; sync(); });
   [80, 250, 700, 1600, 3200].forEach((ms) => setTimeout(sync, ms));
+})();
+
+
+// ══════════ 趋势页：把 SSE 每秒指标累积成长期曲线 ══════════
+// 为什么这么做：Prometheus/Grafana 那套要另起两个服务、还要下载几百 MB；
+// 而这里的数据本来就每秒推一次，累积在浏览器里就能画出趋势，且与整站样式完全统一。
+// 数据来源如实标注：本页打开期间的实时累积（服务端另有 /metrics.prom 供 Prometheus 抓取）。
+(function trendsPanel() {
+  const nav = document.querySelector('nav');
+  const app = document.getElementById('app');
+  if (!nav || !app) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'navbtn';
+  btn.dataset.view = 'trends';
+  btn.textContent = '趋势';
+  nav.appendChild(btn);
+  window.dispatchEvent(new Event('resize'));           // 让底部液态指示器重新定位
+
+  const view = document.createElement('main');
+  view.className = 'view';
+  view.id = 'view-trends';
+  view.hidden = true;
+  view.innerHTML = `
+    <h2>趋势</h2>
+    <p class="sub">由 SSE 每秒推送的指标在本页累积而成，越看越长（最长保留 1 小时）。底部导航切换到本页即开始记录。</p>
+    <div class="toolbar" id="trRange">
+      <button data-sec="300" class="navbtn on" style="border:1px solid var(--hair)">近 5 分钟</button>
+      <button data-sec="900" class="navbtn" style="border:1px solid var(--hair)">近 15 分钟</button>
+      <button data-sec="1800" class="navbtn" style="border:1px solid var(--hair)">近 30 分钟</button>
+      <button data-sec="3600" class="navbtn" style="border:1px solid var(--hair)">近 1 小时</button>
+      <span class="dim" id="trMeta" style="margin-left:auto"></span>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>QPS（每秒请求数）</h3><canvas id="trQps" width="720" height="170"></canvas><div class="kv" id="trQpsStat"></div></div>
+      <div class="card"><h3>P95 延迟（ms）</h3><canvas id="trP95" width="720" height="170"></canvas><div class="kv" id="trP95Stat"></div></div>
+      <div class="card"><h3>错误率（%）</h3><canvas id="trErr" width="720" height="170"></canvas><div class="kv" id="trErrStat"></div></div>
+      <div class="card"><h3>进程内存 RSS（MB）</h3><canvas id="trRss" width="720" height="170"></canvas><div class="kv" id="trRssStat"></div></div>
+    </div>
+    <div class="card">
+      <h3>数据来源说明</h3>
+      <div class="kv" id="trSource"></div>
+    </div>`;
+  app.appendChild(view);
+
+  const HIST = [];            // {t, qps, p95, err, rss}
+  let rangeSec = 300;
+
+  window.__faOnMetrics = (m) => {
+    HIST.push({ t: Date.now(), qps: m.qps ?? 0, p95: m.latency?.p95 ?? 0, err: m.errorRate ?? 0, rss: m.rssMB ?? 0 });
+    if (HIST.length > 3600) HIST.shift();
+    if (!view.hidden) render();
+  };
+
+  /** 手写折线：玻璃卡片内的渐变描边 + 面积填充（不引图表库） */
+  function draw(cv, values, color, fmt) {
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height, pad = 26;
+    ctx.clearRect(0, 0, W, H);
+    const css = getComputedStyle(document.body);
+    ctx.strokeStyle = 'rgba(255,244,216,0.10)';
+    ctx.fillStyle = css.getPropertyValue('--dim') || '#8b7c66';
+    ctx.font = '12px system-ui';
+    ctx.lineWidth = 1;
+    const max = Math.max(1, ...values);
+    for (let i = 0; i <= 3; i++) {
+      const y = pad + ((H - pad * 2) / 3) * i;
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+      ctx.fillText(fmt ? fmt(max - (max / 3) * i) : String(Math.round(max - (max / 3) * i)), 4, y + 4);
+    }
+    if (values.length < 2) { ctx.fillText('正在累积数据…', W / 2 - 44, H / 2); return; }
+    const step = (W - pad * 2) / Math.max(1, values.length - 1);
+    const pts = values.map((v, i) => [pad + i * step, H - pad - (v / max) * (H - pad * 2)]);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, color.replace('rgb', 'rgba').replace(')', ',0.42)'));
+    g.addColorStop(1, color.replace('rgb', 'rgba').replace(')', ',0.02)'));
+    ctx.beginPath(); ctx.moveTo(pts[0][0], H - pad);
+    pts.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(pts[pts.length - 1][0], H - pad); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+
+  const stat = (arr, unit) => {
+    if (!arr.length) return [['样本数', '0']];
+    const mx = Math.max(...arr), mn = Math.min(...arr);
+    const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+    const r = (x) => Math.round(x * 100) / 100;
+    return [['样本数', arr.length], ['最小 / 平均 / 最大', r(mn) + ' / ' + r(avg) + ' / ' + r(mx) + ' ' + unit]];
+  };
+
+  function render() {
+    const from = Date.now() - rangeSec * 1000;
+    const s = HIST.filter((h) => h.t >= from);
+    draw($('trQps'), s.map((h) => h.qps), 'rgb(247,205,124)', (v) => v.toFixed(1));
+    draw($('trP95'), s.map((h) => h.p95), 'rgb(127,216,208)', (v) => v.toFixed(0) + 'ms');
+    draw($('trErr'), s.map((h) => h.err), 'rgb(251,113,133)', (v) => v.toFixed(1) + '%');
+    draw($('trRss'), s.map((h) => h.rss), 'rgb(240,163,94)', (v) => v.toFixed(0) + 'MB');
+    $('trQpsStat').innerHTML = kv(stat(s.map((h) => h.qps), 'req/s'));
+    $('trP95Stat').innerHTML = kv(stat(s.map((h) => h.p95), 'ms'));
+    $('trErrStat').innerHTML = kv(stat(s.map((h) => h.err), '%'));
+    $('trRssStat').innerHTML = kv(stat(s.map((h) => h.rss), 'MB'));
+    const span = HIST.length ? Math.round((Date.now() - HIST[0].t) / 1000) : 0;
+    $('trMeta').textContent = '已累积 ' + HIST.length + ' 个样本 · 跨度 ' + fmtUptime(span);
+    $('trSource').innerHTML = kv([
+      ['本页数据', 'SSE 每秒推送，浏览器端累积（最长 1 小时）'],
+      ['服务端指标端点', '/api/system/metrics.prom（Prometheus 文本格式）'],
+      ['已接入的外部采集', 'Prometheus 每 5 秒抓取一次，抓取目标 health = up'],
+      ['口径', 'QPS 取 10 秒窗口；P95 取最近 500 次请求；错误率取 60 秒窗口'],
+    ]);
+  }
+
+  $('trRange').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sec]');
+    if (!b) return;
+    rangeSec = Number(b.dataset.sec);
+    $('trRange').querySelectorAll('[data-sec]').forEach((x) => x.classList.toggle('on', x === b));
+    render();
+  });
+  btn.addEventListener('click', () => setTimeout(render, 60));
+  setInterval(() => { if (!view.hidden) render(); }, 2000);
 })();
